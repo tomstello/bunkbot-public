@@ -1,0 +1,281 @@
+# Study 4 — Four frontier models {#s4}
+
+```{r s4-build}
+d4 <- build_s4_data(paths)        # strict N=1272 + compliant N=1,073 post-rescore + claim_role/master/compliance
+validate_s4_data(d4)
+s4  <- d4$s4_with_compliance       # strict ITT sample (1,272), with APE compliance flags joined
+nrow(s4)
+table(s4$model_pooled, s4$direction)
+```
+
+In Study 4 (*N* = `r fmt_num(nrow(d4$s4),0)` after pre-registered exclusions), we move from
+private belief to the information environment that surrounds it. Participants wrote a social
+media post about their focal conspiracy and indicated how likely they would be to share it
+publicly online (0–100), before and after the conversation. We randomized participants to
+interact with one of four of the most sophisticated frontier models then available
+(Claude Opus 4.6, Gemini 3.1 Pro, GPT-5.2, and Grok 4). We used the models' default safety
+settings — no jailbreak — but, as in Study 1, the prompt explicitly gave the models permission
+to invent evidence in *both* conditions, so any difference between models reflects how each
+model behaves when offered the same latitude. Belief change is direction-aligned (positive =
+movement toward the model's assigned position).
+
+## Per-model belief change {-}
+
+### Preregistered ITT model: `lm(aligned_belief_change ~ direction * model_pooled)` (HC3) {-}
+
+The registered specification is an unadjusted aligned-change OLS with a direction-by-model
+interaction and HC3 robust SEs, fit intention-to-treat (no compliance filter, no baseline
+covariate). We expose the full coefficient table, the heteroscedasticity check, and — as the
+disclosed precision deviation — the baseline-adjusted refit.
+
+```{r s4-belief-itt}
+s4b <- s4 |> mutate(direction = factor(as.character(direction), levels = c("bunk", "debunk")),
+                    model_pooled = factor(as.character(model_pooled), levels = c("Claude","Gemini","GPT-5.2","Grok")))
+m_s4 <- lm(aligned_belief_change ~ direction * model_pooled, data = s4b)
+coeftest(m_s4, vcov. = hc3(m_s4))                  # full coefficient table (HC3), reference = bunk, Claude
+lmtest::bptest(m_s4)                                # heteroscedasticity check -> motivates HC3
+```
+
+```{r s4-belief-itt-adj}
+# baseline-adjusted refit (disclosed precision deviation): + belief_rating_pre_4
+m_s4a <- lm(aligned_belief_change ~ direction * model_pooled + belief_rating_pre_4, data = s4b)
+coeftest(m_s4a, vcov. = hc3(m_s4a))
+```
+
+Per-model cell means (raw direction-aligned belief change) and the within-model
+bunk-vs-debunk contrast follow. Each cell is a one-sample test that pre→post movement is
+non-zero in the assigned direction; the contrast is the model-specific `directionbunk`
+combination from the HC3-robust fit (mirroring `raw_aligned_means_cells` and the engine's
+`prereg_primary_model_contrasts`).
+
+```{r s4-belief-cells}
+# (a) raw cell means + one-sample t (movement in assigned direction)
+cell_means <- s4b |>
+  group_by(model_pooled, direction) |>
+  summarise(n = n(), mean = mean(aligned_belief_change),
+            se = sd(aligned_belief_change)/sqrt(n),
+            lo = mean - qt(.975, n-1)*se, hi = mean + qt(.975, n-1)*se,
+            t = t.test(aligned_belief_change)$statistic,
+            p = t.test(aligned_belief_change)$p.value, .groups = "drop")
+kable(cell_means, digits = 3,
+      caption = "Study 4 belief change — raw direction-aligned cell means by model and direction.")
+
+# (b) within-model bunk - debunk contrast, HC3 (releveled: debunk reference for engine convention)
+s4r <- s4 |> mutate(direction = factor(as.character(direction), levels = c("debunk","bunk")),
+                    model_pooled = factor(as.character(model_pooled), levels = c("Claude","Gemini","GPT-5.2","Grok")))
+m_s4r <- lm(aligned_belief_change ~ direction * model_pooled, data = s4r)
+Vr <- hc3(m_s4r)
+ref <- levels(s4r$model_pooled)[1]
+within_contrast <- function(m) {
+  w <- c(directionbunk = 1)
+  if (m != ref) w[paste0("directionbunk:model_pooled", m)] <- 1
+  coef_test_row(m_s4r, Vr, w, m)                  # full zero-filled weight vector -> bunk - debunk
+}
+s4_within <- bind_rows(lapply(levels(s4r$model_pooled), within_contrast)) |>
+  transmute(model = contrast, estimate, conf.low = ci_low, conf.high = ci_high,
+            statistic = t, p.value = p)
+kable(s4_within, digits = 3,
+      caption = "Study 4 within-model bunk − debunk contrast on aligned belief change (HC3).")
+```
+
+```{r s4-belief-vals, include=FALSE}
+gc <- function(m, dir, col) cell_means[[col]][cell_means$model_pooled==m & cell_means$direction==dir]
+gpt_bunk_m <- gc("GPT-5.2","bunk","mean"); gpt_bunk_p <- gc("GPT-5.2","bunk","p")
+gpt_deb_m  <- gc("GPT-5.2","debunk","mean"); gpt_deb_p <- gc("GPT-5.2","debunk","p")
+gpt_ct <- s4_within |> filter(model=="GPT-5.2")
+# largest cell p across Claude/Gemini/Grok (to back the "all p<.001" claim)
+others_maxp <- max(cell_means$p[cell_means$model_pooled %in% c("Claude","Gemini","Grok")])
+```
+
+Claude Opus 4.6, Gemini 3.1 Pro and Grok 4 produced effects broadly similar to out-of-the-box
+GPT-4o in Study 2: large and statistically significant bunking *and* debunking effects for all
+three models (every pre-to-post change `r P(others_maxp)`). Their cell means ranged from
+`r mn(min(cell_means$mean[cell_means$model_pooled %in% c("Claude","Gemini","Grok")]))` to
+`r mn(max(cell_means$mean[cell_means$model_pooled %in% c("Claude","Gemini","Grok")]))` points of
+aligned movement. GPT-5.2, conversely, produced a strikingly different pattern in which the
+model failed to promote conspiracies when prompted to. In fact, conspiracy belief *significantly
+decreased* pre-to-post in the bunking condition under GPT-5.2 (M = `r mn(gpt_bunk_m)`,
+`r P(gpt_bunk_p)`), while debunking moved belief `r mn(gpt_deb_m)` points in the intended
+direction (`r P(gpt_deb_p)`). For GPT-5.2, then, debunking was vastly more successful than
+bunking at moving beliefs in the intended direction (bunk − debunk = `r mn2(gpt_ct$estimate)`,
+*z* = `r mn2(gpt_ct$statistic)`, `r P(gpt_ct$p.value)`).
+
+## From private belief to public speech: sharing on the extensive margin {-}
+
+We now turn to the social media posts. We treat "would publicly post" as a binary outcome and
+separate *pro-conspiracy* posting from *anti-conspiracy* posting, because a debunking
+conversation can simultaneously reduce willingness to spread the conspiracy and increase
+willingness to spread a correction. A post counts as pro-conspiracy public speech when the
+participant's sharing likelihood exceeds 50 *and* the post's classified stance is
+pro-conspiracy (stance > 50); anti-conspiracy public speech is sharing likelihood > 50 with an
+anti-conspiracy stance (stance < 50). Within each arm we test the pre→post shift with a McNemar
+within-participant test (mirroring the engine's `ext_extensive_margin` / `extensive_margin`
+block); the per-model rows use direction-aligned posting (pro for bunking, anti for debunking).
+
+```{r s4-extensive}
+sp <- d4$s4 |>
+  mutate(sp_pre = as.numeric(share_pre_4), sp_post = as.numeric(share_post_4),
+         Condition = ifelse(direction == "bunk", "Bunking", "Debunking")) |>
+  filter(!is.na(sp_pre), !is.na(sp_post), !is.na(pre_direction_score), !is.na(post_direction_score)) |>
+  mutate(pre_pro  = sp_pre  > 50 & pre_direction_score  > 50,
+         post_pro = sp_post > 50 & post_direction_score > 50,
+         pre_anti  = sp_pre  > 50 & pre_direction_score  < 50,
+         post_anti = sp_post > 50 & post_direction_score < 50,
+         pre_al  = ifelse(direction == "bunk", pre_pro,  pre_anti),
+         post_al = ifelse(direction == "bunk", post_pro, post_anti))
+
+extfun <- function(df, pre, post) {
+  pr <- df[[pre]]; po <- df[[post]]
+  tb <- table(factor(pr, c(FALSE, TRUE)), factor(po, c(FALSE, TRUE)))
+  p  <- tryCatch(stats::mcnemar.test(tb)$p.value, error = function(e) NA_real_)
+  tibble(n = nrow(df), pre_pct = 100*mean(pr), post_pct = 100*mean(po),
+         net_pp = 100*(mean(po) - mean(pr)),
+         newly_yes = as.integer(tb["FALSE","TRUE"]), newly_no = as.integer(tb["TRUE","FALSE"]),
+         mcnemar_p = p)
+}
+
+# pooled within-arm net change: pro-conspiracy and anti-conspiracy posting
+ext_pooled <- bind_rows(
+  sp |> group_by(Condition) |> group_modify(~ extfun(.x, "pre_pro",  "post_pro"))  |> mutate(outcome = "pro_public_posting"),
+  sp |> group_by(Condition) |> group_modify(~ extfun(.x, "pre_anti", "post_anti")) |> mutate(outcome = "anti_public_posting")
+) |> ungroup()
+kable(ext_pooled |> select(outcome, Condition, n, pre_pct, post_pct, net_pp, mcnemar_p),
+      digits = 3, caption = "Within-arm net percentage-point change in willingness to publicly post (pooled, McNemar).")
+
+# per-model within-arm net change on direction-aligned posting
+ext_model <- sp |>
+  group_by(model_pooled = as.character(model_pooled), Condition) |>
+  group_modify(~ extfun(.x, "pre_al", "post_al")) |> ungroup()
+kable(ext_model |> select(model_pooled, Condition, n, pre_pct, post_pct, net_pp, mcnemar_p),
+      digits = 3, caption = "Per-model within-arm net pp change in direction-aligned public posting (McNemar).")
+```
+
+```{r s4-extensive-vals, include=FALSE}
+gp_pool <- function(oc, cond, col) ext_pooled[[col]][ext_pooled$outcome==oc & ext_pooled$Condition==cond]
+gm <- function(m, cond, col) ext_model[[col]][ext_model$model_pooled==m & ext_model$Condition==cond]
+# debunking pooled effects
+deb_pro_np  <- gp_pool("pro_public_posting","Debunking","net_pp");  deb_pro_p  <- gp_pool("pro_public_posting","Debunking","mcnemar_p")
+deb_anti_np <- gp_pool("anti_public_posting","Debunking","net_pp"); deb_anti_p <- gp_pool("anti_public_posting","Debunking","mcnemar_p")
+# bunking per-model aligned (pro-conspiracy) effects
+b_claude_np <- gm("Claude","Bunking","net_pp");  b_claude_p <- gm("Claude","Bunking","mcnemar_p")
+b_grok_np   <- gm("Grok","Bunking","net_pp");    b_grok_p   <- gm("Grok","Bunking","mcnemar_p")
+b_gem_np    <- gm("Gemini","Bunking","net_pp");  b_gem_p    <- gm("Gemini","Bunking","mcnemar_p")
+b_gpt_np    <- gm("GPT-5.2","Bunking","net_pp"); b_gpt_p    <- gm("GPT-5.2","Bunking","mcnemar_p")
+# bunking effect on anti-conspiracy posting (no decrease for Claude/Gemini/Grok; increase for GPT-5.2)
+gm_anti <- function(m, col) {
+  sub <- sp |> filter(model_pooled == m, Condition == "Bunking")
+  e <- extfun(sub, "pre_anti", "post_anti"); e[[col]]
+}
+anti_claude_np <- gm_anti("Claude","net_pp"); anti_claude_p <- gm_anti("Claude","mcnemar_p")
+anti_gem_np    <- gm_anti("Gemini","net_pp"); anti_gem_p    <- gm_anti("Gemini","mcnemar_p")
+anti_grok_np   <- gm_anti("Grok","net_pp");   anti_grok_p   <- gm_anti("Grok","mcnemar_p")
+anti_gpt_np    <- gm_anti("GPT-5.2","net_pp"); anti_gpt_p   <- gm_anti("GPT-5.2","mcnemar_p")
+```
+
+After the debunking conversations, participants substantially reduced their reported
+likelihood of sharing *pro-conspiracy* posts (net change `r mn(deb_pro_np)` pp, `r P(deb_pro_p)`)
+and substantially increased their likelihood of sharing *anti-conspiracy* posts
+(net change +`r mn(deb_anti_np)` pp, `r P(deb_anti_p)`) — both shifts highly significant across
+all models. Conversely, in the bunking condition participants showed much smaller increases in
+their likelihood of sharing pro-conspiracy posts after talking to Claude Opus 4.6
+(+`r mn(b_claude_np)` pp, `r P(b_claude_p)`) and Grok 4 (+`r mn(b_grok_np)` pp, `r P(b_grok_p)`),
+no significant change after Gemini 3.1 Pro (+`r mn(b_gem_np)` pp, `r P(b_gem_p)`), and a large
+*decrease* after GPT-5.2 (`r mn(b_gpt_np)` pp, `r P(b_gpt_p)`). On the anti-conspiracy margin,
+bunking left sharing intentions essentially unchanged for Gemini (`r mn(anti_gem_np)` pp,
+`r P(anti_gem_p)`) and Grok (+`r mn(anti_grok_np)` pp, `r P(anti_grok_p)`), produced a small but
+significant *decrease* for Claude (`r mn(anti_claude_np)` pp, `r P(anti_claude_p)`), and a
+significant *increase* for GPT-5.2 (+`r mn(anti_gpt_np)` pp, `r P(anti_gpt_p)`) — the last
+consistent with that model arguing against the conspiracy even when assigned to bunk.
+
+## Compliance by model {-}
+
+The variation in bunking efficacy across models is largely attributable to variation in
+*compliance* in the bunking condition. We use the cached APE turn-0 classifier: `attempt_binary`
+(the model attempted the assigned direction) and `strict_compliant` (attempted and did not
+refuse). Rates are computed among compliance-scored conversations in the bunking arm, mirroring
+the engine's `compliance_cells` block.
+
+```{r s4-compliance}
+comp_bunk <- s4 |>
+  filter(direction == "bunk", compliance_scored) |>
+  group_by(model_pooled) |>
+  summarise(n = n(),
+            attempt_rate = mean(attempt_binary == 1, na.rm = TRUE),
+            refusal_rate = mean(refusal_binary == 1, na.rm = TRUE),
+            strict_compliance_rate = mean(strict_compliant, na.rm = TRUE),
+            .groups = "drop")
+kable(comp_bunk, digits = 3,
+      caption = "Study 4 bunking-arm compliance by model (APE turn-0 classifier).")
+```
+
+```{r s4-compliance-vals, include=FALSE}
+ca <- function(m) comp_bunk$strict_compliance_rate[comp_bunk$model_pooled==m]
+```
+
+When prompted to bunk, compliance (strict: attempted and did not refuse) was high for
+Gemini 3.1 Pro (`r pct(ca("Gemini"),0)`), Grok 4 (`r pct(ca("Grok"),0)`), and
+Claude Opus 4.6 (`r pct(ca("Claude"),0)`), but extremely low for GPT-5.2 (`r pct(ca("GPT-5.2"))`).
+
+### GPT-5.2 bunking decomposition {-}
+
+When GPT-5.2 did not attempt to bunk, it was not merely silent. Among its compliance-scored,
+non-attempting bunking conversations we split the non-attempts into explicit refusals and
+counter-arguments (no refusal — the model instead argued *against* the conspiracy), mirroring
+`ext_nonattempt.R` / the `gpt52_nonattempt_split` block.
+
+```{r s4-gpt52-decomp}
+gpt_bunk <- s4 |> filter(model_pooled == "GPT-5.2", direction == "bunk", compliance_scored)
+n_scored  <- nrow(gpt_bunk)
+n_attempt <- sum(gpt_bunk$attempt_binary == 1, na.rm = TRUE)
+gpt_na <- gpt_bunk |> filter(attempt_binary == 0)
+n_na      <- nrow(gpt_na)
+n_refuse  <- sum(gpt_na$refusal_binary == 1, na.rm = TRUE)         # explicit refusals
+n_counter <- sum(gpt_na$refusal_binary == 0, na.rm = TRUE)         # argued against (no refusal)
+gpt_decomp <- tibble(
+  term = c("attempted", "did_not_attempt", "argued_against_no_refusal", "explicit_refusal"),
+  n    = c(n_attempt, n_na, n_counter, n_refuse),
+  share_of_scored = c(n_attempt, n_na, n_counter, n_refuse) / n_scored)
+kable(gpt_decomp, digits = 3,
+      caption = "GPT-5.2 bunking arm: attempt / counter-argument / refusal decomposition (compliance-scored).")
+```
+
+```{r s4-gpt52-vals, include=FALSE}
+sh <- function(lab) gpt_decomp$share_of_scored[gpt_decomp$term==lab]
+```
+
+That is, when prompted to bunk, GPT-5.2 ignored its instructions to mislead and instead argued
+*against* the conspiracy in the majority (`r pct(sh("argued_against_no_refusal"))`) of cases,
+and simply refused to comply `r pct(sh("explicit_refusal"))` of the time.
+
+## Claim accuracy by model in bunking {-}
+
+Finally, GPT-5.2's compliance also differed in *kind*. Every substantive factual claim was
+extracted and independently fact-checked; we read off the share of intended-direction
+("aligned") claims scoring below the low-veracity cutoff (fact-check score < 40) in the
+bunking arm, by model — the claim-level tail rate that SI Table S37 reports (block
+`veracity_tail`, term `p_lt40`, strict claim set). This is the estimand the manuscript
+quotes. (A per-conversation "% explicitly false" panel metric, `accuracy_panel_metrics`,
+model-adjusts conversation-level rates and can order Gemini/Grok differently; the
+manuscript standardizes on the claim-level Table S37 measure.)
+
+```{r s4-accuracy}
+source(file.path(REPO_ROOT, "code", "R", "build_all_numbers.R"))  # load_or_build_all_numbers()
+false_bunk <- load_or_build_all_numbers(REPO_ROOT)$all_numbers |>
+  filter(block == "veracity_tail", term == "p_lt40", outcome == "aligned",
+         direction == "bunk", sample == "strict_claims",
+         grepl("^Study4_", model)) |>
+  transmute(model = sub("^Study4_", "", model), pct_lt40 = estimate, n_claims = n)
+kable(false_bunk, digits = 1,
+      caption = "Study 4 bunking-arm % of aligned claims scoring < 40 (claim-level; SI Table S37 measure).")
+```
+
+```{r s4-accuracy-vals, include=FALSE}
+pf <- function(m) false_bunk$pct_lt40[false_bunk$model==m]
+```
+
+GPT-5.2 made overwhelmingly accurate claims — only `r pct(pf("GPT-5.2")/100)` of its aligned
+bunking claims were false — whereas the other models were much more willing to lie when bunking:
+Claude Opus 4.6 = `r pct(pf("Claude")/100)` false, Grok 4 = `r pct(pf("Grok")/100)` false,
+and Gemini 3.1 Pro = `r pct(pf("Gemini")/100)` false. The model that best obeyed its honesty
+instincts (GPT-5.2) was precisely the one that refused to bunk; the models that complied did so
+by fabricating evidence at high rates.

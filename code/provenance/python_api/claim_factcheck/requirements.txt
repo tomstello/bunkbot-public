@@ -1,0 +1,2 @@
+# Shared pinned Python environment for all provenance and manuscript utilities.
+-r ../../../../requirements-python.txt

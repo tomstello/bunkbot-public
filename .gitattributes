@@ -1,0 +1,14 @@
+# Treat data as binary (no diff/merge attempts) and mark generated output so it
+# does not skew GitHub language stats. Large data files are committed directly
+# (not via Git LFS) per the project's choice.
+*.rds    binary
+*.jsonl  binary -diff
+*.csv    -diff
+*.gz     binary
+*.qsf    -diff
+*.pdf    binary
+*.png    binary
+
+output/**        linguist-generated=true
+data/**          linguist-vendored=true
+code/provenance/** linguist-vendored=true

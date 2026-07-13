@@ -1,0 +1,9 @@
+outcome,test,estimate,ci_low,ci_high,df_num,df_den,f,p
+Post weighted sharing,Average bunk - debunk across models,18.815306614022315,16.83683826337127,20.79377496467336,4,1831,104.60185502096094,2.5500264938473358e-80
+Post weighted sharing,Omnibus direction x model interaction,NA,NA,NA,3,1831,38.64882071330246,3.2523097959156005e-24
+Post LLM-coded stance,Average bunk - debunk across models,28.929469203348958,26.16468609851582,31.694252308182097,4,1831,136.1137037404118,6.5909189950911475e-102
+Post LLM-coded stance,Omnibus direction x model interaction,NA,NA,NA,3,1831,47.253263285080834,2.0676285546688828e-29
+Post sharing likelihood,Average bunk - debunk across models,2.8442621389650333,0.7899766147755569,4.89854766315451,4,1831,2.810441031214658,0.024266400955405748
+Post sharing likelihood,Omnibus direction x model interaction,NA,NA,NA,3,1831,1.5302435997234014,0.2047259343012087
+Post focal belief,Average bunk - debunk across models,27.84619415401331,25.18404281605162,30.508345491975003,4,1831,140.84940072861556,4.702008171742168e-105
+Post focal belief,Omnibus direction x model interaction,NA,NA,NA,3,1831,53.02618777380883,7.295011408641769e-33

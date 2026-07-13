@@ -1,0 +1,331 @@
+# Study 3 — Truth-Constrained GPT-4o {#s3}
+
+```{r s3-data}
+s3 <- s13 |> filter(study_factor == "Truth-Constrained") |> droplevels() |> recode_perceptions() |> add_gcbs()
+nrow(s3)
+```
+
+In Study 3 (*N* = `r fmt_num(nrow(s3),0)`) we test the effect of a very basic safeguard —
+simply instructing the model to argue only with accurate, truthful evidence. This
+"truth-constrained" GPT-4o was identical to the Study 2 standard model except for a system
+prompt forbidding fabricated or misleading claims. The constraint lets us ask two questions
+at once: does it actually make the model's arguments more accurate, and does honest persuasion
+remain effective?
+
+## Claim veracity across Studies 1–3 {-}
+
+Every substantive factual claim the model made was extracted and independently fact-checked
+(0–100 veracity). We adopt the *direction-aligned* measure: the mean veracity of the
+direct-and-indirect claims that point in the model's assigned direction (supporting the
+conspiracy when bunking, opposing it when debunking), averaged within conversation and then
+across conversations. This mirrors `compute_veracity_numbers()` exactly — cached per-claim
+LLM labels aggregated in R, no API calls.
+
+```{r s3-veracity}
+labels <- read_claim_labels(paths)
+# Restrict to the analytic sample so excluded-participant claims cannot bleed in
+# (the cached labels are already analytic-only; this enforces it explicitly).
+labels <- labels |> filter(conversation_id %in% s13$response_id)
+conv   <- conv_aligned_veracity(labels) |>
+  filter(study %in% c("Study1","Study2","Study3"), !is.na(aligned_veracity))
+
+# study x direction mean aligned veracity (conversation-level), with CI
+vtab <- conv |>
+  group_by(study, direction) |>
+  summarise(n_conv = n(), mean_veracity = mean(aligned_veracity),
+            se = sd(aligned_veracity)/sqrt(n_conv),
+            lo = mean_veracity - qt(.975, n_conv-1)*se,
+            hi = mean_veracity + qt(.975, n_conv-1)*se, .groups = "drop")
+kable(vtab, digits = 2, caption = "Studies 1–3 aligned claim veracity by direction (conversation-level).")
+
+# two-sample d (debunk vs bunk) + Welch t, per study
+vstat <- function(st) {
+  cv <- conv |> filter(study == st)
+  b <- cv$aligned_veracity[cv$direction == "bunk"]
+  d <- cv$aligned_veracity[cv$direction == "debunk"]
+  sp <- sqrt(((length(b)-1)*var(b) + (length(d)-1)*var(d)) / (length(b)+length(d)-2))
+  tt <- t.test(d, b)                                   # debunk − bunk
+  tibble(study = st, mBunk = mean(b), mDebunk = mean(d),
+         d = (mean(d)-mean(b))/sp, t = unname(tt$statistic), p = tt$p.value)
+}
+vd <- bind_rows(lapply(c("Study1","Study2","Study3"), vstat))
+kable(vd, digits = 3, caption = "Aligned veracity, debunking − bunking two-sample d (per study).")
+```
+
+```{r s3-veracity-false}
+# Percent of aligned, fact-checked claims below 40 ("percent false"), per-claim level
+pct_false <- labels |>
+  mutate(is_aligned = aligned_flag(stance_to_focal, directness_to_focal, direction)) |>
+  filter(is_aligned, !is.na(veracity_score), study_source %in% c("Study1","Study2","Study3")) |>
+  group_by(study_source, direction) |>
+  summarise(n = n(), pct_false = mean(veracity_score < 40), .groups = "drop")
+kable(pct_false, digits = 3, caption = "Share of aligned claims below 40 veracity ('percent false').")
+```
+
+```{r s3-veracity-vals, include=FALSE}
+gv <- function(st, dir) vtab$mean_veracity[vtab$study==st & vtab$direction==dir]
+v3 <- vd |> filter(study == "Study3")
+pf <- function(st, dir) pct_false$pct_false[pct_false$study_source==st & pct_false$direction==dir]
+```
+
+The constraint worked. In Study 1, the jailbroken model's aligned claims averaged
+`r mn(gv("Study1","bunk"))` veracity when bunking and `r mn(gv("Study1","debunk"))` when
+debunking; in Study 2 the standard model averaged `r mn(gv("Study2","bunk"))` (bunk) and
+`r mn(gv("Study2","debunk"))` (debunk). Under the truth constraint these rose to
+`r mn(gv("Study3","bunk"))` (bunk) and `r mn(gv("Study3","debunk"))` (debunk), and the
+bunking–debunking veracity gap collapsed (debunk − bunk *d* = `r mn2(v3$d)`,
+`r P(v3$p)`, versus *d* = `r mn2(vd$d[vd$study=="Study1"])` and
+*d* = `r mn2(vd$d[vd$study=="Study2"])` in the two unconstrained studies). The share of
+explicitly false aligned claims (veracity < 40) fell accordingly: in Study 1,
+`r pct(pf("Study1","bunk"))` of bunking claims and `r pct(pf("Study1","debunk"))` of
+debunking claims were false, dropping to `r pct(pf("Study3","bunk"))` (bunk) and
+`r pct(pf("Study3","debunk"))` (debunk) in the truth-constrained study.
+
+## Belief change {-}
+
+### Baseline-adjusted ANCOVA (condition + baseline; HC3) {-}
+
+```{r s3-belief-adj}
+m_s3 <- lm(change ~ condition_factor + belief_rating_pre_rc, data = s3)
+coeftest(m_s3, vcov. = hc3(m_s3))                  # full coefficient table (HC3)
+lmtest::bptest(m_s3)                                # heteroscedasticity check -> motivates HC3
+```
+
+```{r s3-belief-adj-cells}
+V_s3 <- hc3(m_s3)
+s3_adj <- bind_rows(
+  Bunking   = as_tibble(lin_cell(m_s3, s3, "Bunking",   V_s3)),
+  Debunking = as_tibble(lin_cell(m_s3, s3, "Debunking", V_s3)), .id = "condition") |>
+  select(condition, estimate, conf.low, conf.high, p.value)
+s3_ct_adj <- lin_contrast(m_s3, s3, "Bunking", "Debunking", V_s3)   # bunk vs debunk (adjusted)
+kable(s3_adj, digits = 3, caption = "Study 3 belief change — adjusted marginal means (ANCOVA, HC3).")
+s3_ct_adj
+```
+
+### Unadjusted specification {-}
+
+```{r s3-belief-unadj}
+m_s3u <- lm(change ~ condition_factor, data = s3)
+coeftest(m_s3u, vcov. = hc3(m_s3u))                 # unadjusted, HC3
+s3_raw <- within_summary(s3)                        # raw within-condition means, dz, Hedges g, % change
+kable(s3_raw |> select(condition_factor, n, pre, m, lo, hi, dz, g, pct_change),
+      digits = 3, caption = "Study 3 belief change — raw (unadjusted) within-condition summary.")
+```
+
+```{r s3-belief-vals, include=FALSE}
+bunk3 <- s3_raw |> filter(condition_factor == "Bunking")
+deb3  <- s3_raw |> filter(condition_factor == "Debunking")
+z_s3  <- s3_ct_adj$estimate / s3_ct_adj$std.error
+p_deb3  <- t.test(s3$change[s3$condition_factor=="Debunking"])$p.value
+p_bunk3 <- t.test(s3$change[s3$condition_factor=="Bunking"])$p.value
+```
+
+Honest debunking remained strong: focal-conspiracy belief fell by `r mn(deb3$m)` points in
+the intended direction (95% CI `r ci(deb3$lo, deb3$hi)`, `r P(p_deb3)`, *g* = `r mn2(deb3$g)`).
+Truth-constrained bunking, by contrast, was greatly reduced: belief rose only `r mn(bunk3$m)`
+points (95% CI `r ci(bunk3$lo, bunk3$hi)`, `r P(p_bunk3)`, *d* = `r mn2(bunk3$dz)`), roughly a
+third the size of the standard-model bunking effect. The two magnitudes now differed sharply
+(adjusted bunk − debunk contrast = `r mn2(s3_ct_adj$estimate)`, *z* = `r mn2(abs(z_s3))`,
+`r P(s3_ct_adj$p.value)`) — the truth constraint hobbled bunking far more than debunking.
+
+## Attempt-to-Persuade (APE) compliance {-}
+
+```{r s3-ape}
+s3_ape <- s3 |> group_by(condition_factor) |>
+  summarise(n = n(),
+            attempt_rate = mean(evaluator_label == 1, na.rm = TRUE),
+            paired_rate  = mean(evaluator_label == 1 & reverse_evaluator_label == 1, na.rm = TRUE),
+            .groups = "drop")
+s3_ape
+```
+
+```{r s3-ape-vals, include=FALSE}
+ape_b <- s3_ape$attempt_rate[s3_ape$condition_factor == "Bunking"]
+ape_d <- s3_ape$attempt_rate[s3_ape$condition_factor == "Debunking"]
+```
+
+Part of the bunking shortfall is refusal: under the truth constraint the model attempted to
+bunk in only `r pct(ape_b)` of bunking conversations, versus `r pct(ape_d)` of debunking
+conversations — when asked to argue *for* a conspiracy using only true evidence, it sometimes
+declined.
+
+## Non-compliant bunking {-}
+
+```{r s3-noncompliant}
+nc3 <- s3 |> filter(condition_factor == "Bunking", evaluator_label == 0)
+nc3_t <- t.test(nc3$change)
+tibble(n = nrow(nc3), mean = unname(nc3_t$estimate),
+       lo = nc3_t$conf.int[1], hi = nc3_t$conf.int[2],
+       t = unname(nc3_t$statistic), p = nc3_t$p.value)
+```
+
+```{r s3-noncompliant-vals, include=FALSE}
+nc3_m <- unname(nc3_t$estimate)
+```
+
+The refusals were not innocuous. In the `r fmt_num(nrow(nc3),0)` bunking conversations the
+model did not attempt (first-turn `evaluator_label == 0`), belief actually moved *against* the
+assigned bunking goal: `r mn(nc3_m)` points (95% CI
+`r ci(nc3_t$conf.int[1], nc3_t$conf.int[2])`, *t* = `r mn2(nc3_t$statistic)`,
+`r P(nc3_t$p.value)`) — when the truth-constrained model balked at promoting a conspiracy, the
+exchange tended to leave participants *less* conspiratorial, a small backfire on the bunker.
+
+## Matched-compliance counterfactual {-}
+
+The cleanest test isolates the truth constraint from refusal. We restrict *both* arms to the
+conversations the model would have engaged under either prompt — the dual-compliance rule
+`evaluator_label == 1 & reverse_evaluator_label == 1`, identical to the pooled-symmetry rule —
+and contrast direction-aligned belief change. This mirrors the engine's `ext_s3_counterfactual`
+(canonical block `s3_counterfactual`).
+
+```{r s3-counterfactual}
+A <- s3 |> filter(condition == "treatment_mid_bunk",   evaluator_label == 1, reverse_evaluator_label == 1)
+B <- s3 |> filter(condition == "treatment_mid_debunk", evaluator_label == 1, reverse_evaluator_label == 1)
+matched <- bind_rows(A, B)
+matched$direction <- factor(matched$direction, levels = c("debunk", "bunk"))
+m_cf <- lm(change ~ direction + belief_rating_pre_rc, data = matched)
+coeftest(m_cf, vcov. = hc3(m_cf))                   # full coefficient table (HC3)
+lmtest::bptest(m_cf)                                 # assumption check
+```
+
+```{r s3-counterfactual-vals, include=FALSE}
+cf <- coeftest(m_cf, vcov. = hc3(m_cf))["directionbunk", ]
+cf_est <- cf[["Estimate"]]; cf_se <- cf[["Std. Error"]]
+cf_lo  <- cf_est - 1.96 * cf_se; cf_hi <- cf_est + 1.96 * cf_se
+cf_p   <- cf[["Pr(>|t|)"]]
+```
+
+Even among these matched, fully compliant conversations, truth-constrained bunking moved
+belief `r mn2(abs(cf_est))` points *less* than debunking did (bunk − debunk =
+`r mn2(cf_est)`, 95% CI `r ci(cf_lo, cf_hi)`, `r P(cf_p)`). The gap is not driven by refusals
+or topic mix: holding the model's willingness to engage constant, honesty alone costs bunking
+several points of persuasive force.
+
+```{r s3-relefficacy}
+# Baseline-adjusted (ANCOVA) compliant bunking by study (mirrors block "belief_change_compliant")
+comp_lin_bunk <- function(sf) {
+  dat <- s13 |> filter(study_factor == sf, evaluator_label == 1, reverse_evaluator_label == 1) |> droplevels()
+  mod <- lm(change ~ condition_factor + belief_rating_pre_rc, data = dat)
+  lin_cell(mod, dat, "Bunking", hc3(mod))$estimate
+}
+rel <- tibble(study = c("Jailbroken","Standard","Truth-Constrained"),
+              compliant_bunk = vapply(c("Jailbroken","Standard","Truth-Constrained"), comp_lin_bunk, numeric(1)))
+rel <- rel |> mutate(efficacy_vs_S3 = compliant_bunk[study=="Truth-Constrained"] / compliant_bunk)
+kable(rel, digits = 3, caption = "Compliant bunking (baseline-adjusted ANCOVA) and S3 relative efficacy.")
+```
+
+```{r s3-relefficacy-vals, include=FALSE}
+eff_vs_s2 <- rel$efficacy_vs_S3[rel$study == "Standard"]
+eff_vs_s1 <- rel$efficacy_vs_S3[rel$study == "Jailbroken"]
+```
+
+Cast as relative efficacy among compliant conversations, truth-constrained bunking retained
+only `r pct(eff_vs_s2,0)` of the standard-model bunking effect and `r pct(eff_vs_s1,0)` of the
+jailbroken bunking effect — the honesty constraint roughly halves how far a compliant bunking
+conversation can move belief.
+
+## Truthful "ammunition" and the top veracity quartile {-}
+
+Why does honest bunking work at all? Where genuinely suspicious true evidence exists, the
+truth-constrained model can still build a persuasive case. We rank each bunking conversation by
+its conversation-average aligned veracity and read off the mean belief change in the top
+quartile, by study.
+
+```{r s3-topquartile}
+sjoin <- s13 |> filter(condition_factor == "Bunking") |>
+  inner_join(conv |> transmute(response_id = conversation_id, aligned_veracity), by = "response_id")
+topq <- function(sf) {
+  sub <- sjoin |> filter(study_factor == sf, !is.na(aligned_veracity))
+  cut <- quantile(sub$aligned_veracity, .75, na.rm = TRUE)
+  tq  <- sub |> filter(aligned_veracity >= cut)
+  tibble(study = sf, n_top = nrow(tq), cutoff = cut, mean_change = mean(tq$change))
+}
+tq_tab <- bind_rows(lapply(c("Jailbroken","Standard","Truth-Constrained"), topq))
+kable(tq_tab, digits = 2, caption = "Top-veracity-quartile bunking belief change, by study.")
+```
+
+```{r s3-topquartile-vals, include=FALSE}
+tq_s1 <- tq_tab$mean_change[tq_tab$study=="Jailbroken"]
+tq_s2 <- tq_tab$mean_change[tq_tab$study=="Standard"]
+tq_s3 <- tq_tab$mean_change[tq_tab$study=="Truth-Constrained"]
+```
+
+In the top quartile of aligned veracity, bunking moved belief `r mn(tq_s1)` points in Study 1
+and `r mn(tq_s2)` in Study 2; under the truth constraint the top-quartile effect was
+`r mn(tq_s3)` points. Honest bunking can still shift belief substantially, but only on the
+slice of topics where truthful, on-direction evidence is abundant.
+
+## Paltering and the texture of honest bunking {-}
+
+Reading the truth-constrained transcripts, the model rarely lies; instead it *palters* —
+stringing together individually true but selectively chosen facts, leaning on rhetorical
+framing, appeals to unanswered questions, and motivated emphasis to nudge belief toward the
+conspiracy without stating anything false. The constraint changes the *texture* of persuasion
+more than it removes it, which is why a real (if attenuated) bunking effect survives.
+
+## Exploratory moderation {-}
+
+Finally we ask, exploratorily, for whom truth-constrained persuasion is strongest. Following
+`compute_moderator_numbers()`, we regress direction-aligned belief change on each z-scored
+pre-treatment moderator (baseline conspiracist ideation via the 7-item GCBS, baseline trust in
+AI, and political ideology), within condition and baseline-belief-adjusted, plus the
+condition-by-moderator interaction.
+
+```{r s3-moderators}
+.z <- function(x) { x <- suppressWarnings(as.numeric(x)); s <- sd(x, na.rm=TRUE)
+  if (!is.finite(s) || s == 0) return(rep(NA_real_, length(x))); (x - mean(x, na.rm=TRUE))/s }
+.gcbs_pre <- function(df) {
+  gp <- paste0("x", c(2,4,6,8,10,12,14), "_gcbs_pre")
+  m <- sapply(gp, function(c) suppressWarnings(as.numeric(df[[c]])))
+  ifelse(rowSums(is.na(m)) == 0, rowMeans(m), NA_real_) }
+.s13_ideology <- function(x) { v <- suppressWarnings(as.numeric(as.character(x))); ifelse(v %in% 1:3, v, NA_real_) }
+
+mods <- list(gcbs = .gcbs_pre(s3),
+             ai_trust = suppressWarnings(as.numeric(s3$genai_trust)),
+             ideology = .s13_ideology(s3$party_affil))
+z_base <- .z(s3$belief_rating_pre_rc)
+
+# per-condition baseline-adjusted standardized slopes
+slope_rows <- list(); inter_rows <- list()
+for (nm in names(mods)) {
+  base_dat <- tibble(change = s3$change, direction = as.character(s3$direction),
+                     z_mod = .z(mods[[nm]]), z_base = z_base)
+  for (cond in c("bunk","debunk")) {
+    d <- base_dat |> filter(direction == cond, !is.na(change), !is.na(z_mod), !is.na(z_base))
+    fit <- lm(change ~ z_mod + z_base, data = d)
+    r <- hc3_tidy(fit) |> filter(term == "z_mod")
+    slope_rows[[length(slope_rows)+1]] <- r |>
+      transmute(moderator = nm, condition = cond, n = nrow(d),
+                estimate, std.error, statistic, p.value)
+  }
+  di <- base_dat |> filter(!is.na(change), !is.na(z_mod), !is.na(z_base))
+  di$direction <- factor(di$direction, levels = c("bunk","debunk"))
+  fit_i <- lm(change ~ direction * z_mod + z_base, data = di)
+  ri <- hc3_tidy(fit_i) |> filter(term == "directiondebunk:z_mod")
+  inter_rows[[length(inter_rows)+1]] <- ri |>
+    transmute(moderator = nm, n = nrow(di), estimate, std.error, statistic, p.value)
+}
+kable(bind_rows(slope_rows), digits = 3,
+      caption = "Study 3 — per-condition standardized moderator slopes (HC3, baseline-adjusted).")
+kable(bind_rows(inter_rows), digits = 3,
+      caption = "Study 3 — condition-by-moderator interactions (debunk − bunk × moderator, HC3).")
+```
+
+```{r s3-moderators-vals, include=FALSE}
+sl <- bind_rows(slope_rows); it <- bind_rows(inter_rows)
+g_gcbs_deb <- sl |> filter(moderator=="gcbs", condition=="debunk")
+i_gcbs <- it |> filter(moderator=="gcbs")
+i_base <- {
+  bd <- tibble(change=s3$change, direction=factor(as.character(s3$direction), levels=c("bunk","debunk")), z_mod=z_base)
+  bd <- bd |> filter(!is.na(change), !is.na(z_mod))
+  hc3_tidy(lm(change ~ direction * z_mod, data = bd)) |> filter(term=="directiondebunk:z_mod")
+}
+```
+
+Two patterns stand out. Baseline conspiracist ideation moderated debunking strongly: a 1-SD
+higher GCBS predicted `r mn2(g_gcbs_deb$estimate)` points *less* debunking-aligned change
+(`r P(g_gcbs_deb$p.value)`), and the condition-by-GCBS interaction was reliable
+(`r mn2(i_gcbs$estimate)`, `r P(i_gcbs$p.value)`): the most conspiracy-minded participants were
+the hardest to debunk. Baseline belief itself moderated the bunk–debunk gap the same way
+(interaction `r mn2(i_base$estimate)`, `r P(i_base$p.value)`). Baseline trust in AI and
+political ideology showed no reliable moderation of the truth-constrained effect.

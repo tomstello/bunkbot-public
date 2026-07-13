@@ -1,0 +1,38 @@
+# gitleaks config for the Bunkbot public repo.
+# Run:  gitleaks dir . --config .gitleaks.toml --no-banner   (or `make scan`)
+# Also useful as a pre-commit hook before any public push.
+
+title = "bunkbot-public secret scan"
+
+# Start from gitleaks' built-in rule set, then add explicit catches + allowlist.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "openrouter-key"
+description = "OpenRouter API key"
+regex = '''sk-or-v1-[0-9a-zA-Z]{16,}'''
+keywords = ["sk-or-v1-"]
+
+[[rules]]
+id = "openai-key"
+description = "OpenAI API key"
+regex = '''sk-(proj-)?[0-9a-zA-Z_-]{20,}'''
+keywords = ["sk-"]
+
+[allowlist]
+description = "Known-safe matches"
+paths = [
+  '''\.gitleaks\.toml$''',
+  # output/ is generated and gitignored (never ships); its manifest key names
+  # (e.g. "s1.ape.bunk_attempt_pct") trip the generic-api-key entropy rule.
+  '''^output/''',
+]
+# The 4 survey QSFs contain the literal substring "sk-" in survey CONTENT
+# (not a credential); the regexes above require the full key shape, so they
+# do not match, but this documents the audited false positive.
+regexes = [
+  '''OPENROUTER_API_KEY=\s*$''',
+  '''OPENAI_API_KEY=\s*$''',
+  '''GEMINI_API_KEY=\s*$''',
+]

@@ -1,0 +1,55 @@
+# ── Secrets (NEVER commit) ────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.key
+.openrouter_key
+*_api_key*
+secrets.*
+
+# ── Rendered output + build cache (all rebuilt by `make results`) ─────────
+# Everything under output/ is generated; keep the directory, ignore contents.
+output/*
+!output/.gitkeep
+analyses_files/
+analyses_cache/
+*_files/
+*_cache/
+
+# ── R session / renv cruft ────────────────────────────────────────────────
+*.log
+.Rhistory
+.RData
+.Rproj.user/
+renv/library/
+renv/local/
+renv/staging/
+renv/python/
+renv/sandbox/
+
+# ── OS / editor cruft ─────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*~
+~$*
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+
+# ── Local tooling state ───────────────────────────────────────────────────
+.claude/
+
+# ── Not distributed publicly ──────────────────────────────────────────────
+# The Word manuscript (and any "(wired)" tracked-changes copies) stays local;
+# the public repo reproduces its numbers but does not carry the draft itself.
+/*.docx
+# The extended SI sources are not part of the public release (the focal SI is).
+supplement_extended/
+# Manuscript-wiring working notes (decision queue / staged anchors / prose queue)
+code/manuscript_wiring/unwired.md
+code/manuscript_wiring/wiring_map_pending.yaml
+code/manuscript_wiring/prose_fixes.yaml
+code/manuscript_wiring/manifest_spec.csv
+
+# NOTE: large data files under data/ ARE committed (gzipped; see the Compression
+# note at the top of CATALOGUE.md).

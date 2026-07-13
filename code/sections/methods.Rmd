@@ -1,0 +1,528 @@
+# Methods (reproducible quantities)
+
+The Methods narrative is reproduced as in the manuscript; every **quantitative**
+claim is recomputed live from the raw data and the cached LLM-derived files. Each
+quantity is preceded by an exposed code chunk that shows the computation and a
+tidy table. Samples are the canonical no-duration-filter Studies 1–3 frame
+(`s13`) and the strict Study-4 frame (`d4$s4`, *N* = 1,272). For convenience this
+section builds the Study-4 object once.
+
+```{r me-build-s4}
+d4 <- build_s4_data(paths)              # strict S4 analytic frame + cached merges
+s4 <- d4$s4                             # N = 1,272 (no-duration strict sample)
+nrow(s4)
+```
+
+## Sample sizes {-}
+
+```{r me-ns}
+me_ns <- s13 |>
+  dplyr::count(study_factor, name = "analytic_N") |>
+  dplyr::mutate(study_factor = as.character(study_factor)) |>
+  dplyr::bind_rows(tibble::tibble(study_factor = "Study 4 (frontier models)", analytic_N = nrow(s4)))
+me_ns
+total_N <- sum(me_ns$analytic_N)
+total_N
+```
+
+```{r me-ns-vals, include=FALSE}
+gN <- function(s) me_ns$analytic_N[me_ns$study_factor == s]
+```
+
+After the pre-registered exclusions, the analytic samples are *N* =
+`r fmt_num(gN("Jailbroken"),0)` (Study 1, Jailbroken), *N* =
+`r fmt_num(gN("Standard"),0)` (Study 2, Standard), *N* =
+`r fmt_num(gN("Truth-Constrained"),0)` (Study 3, Truth-Constrained), and *N* =
+`r fmt_num(gN("Study 4 (frontier models)"),0)` (Study 4, four frontier models),
+for a total of *N* = `r fmt_num(total_N,0)` participants across the four studies.
+
+### Screening funnel (reconstructed from the raw data) {-}
+
+The analytic samples are the end of a deliberately stringent, identically-applied screening
+protocol. We reconstruct the full funnel **from the raw exports in every study** so every
+exclusion is auditable end to end: the entrant-level Qualtrics files for Studies 1–3 (the
+`clean_*` analytic files begin only at the equivocality classifier, so the upstream
+attention/bot screens are visible only in the raw entrants) and the raw Study-4 export.
+
+```{r me-funnel-s13, message=FALSE}
+suppressMessages({
+  source(file.path(REPO_ROOT, "code", "R", "tables_dynamic.R"))   # std_row schema
+  source(file.path(REPO_ROOT, "code", "R", "ext_funnel_s13.R"))   # S1-3 funnel from the raw entrants
+})
+fun13 <- compute_screening_funnel_s13_full(
+  list(s13 = s13, paths = paths),
+  file.path(REPO_ROOT, "data", "raw_qualtrics"))
+funnel_s13 <- fun13 |>
+  dplyr::filter(!is.na(statistic)) |>
+  dplyr::transmute(order = statistic, Stage = term, study = model, n) |>
+  tidyr::pivot_wider(names_from = study, values_from = n) |>
+  dplyr::arrange(order) |> dplyr::select(-order)
+kable(funnel_s13, caption = "Studies 1–3 screening funnel — rows retained at each stage, reconstructed from the raw entrant exports. The terminal stage equals the analytic sample; the cleaned analytic files begin at 'reached_equivocality'.")
+```
+
+```{r me-funnel-s4}
+flow4 <- make_screening_flow(d4$s4_raw)
+kable(flow4 |> dplyr::transmute(Stage = stage, `N remaining` = n_remaining,
+                                `Excluded here` = excluded_at_step,
+                                `% of raw` = round(100 * pct_of_raw, 1)),
+      caption = "Study 4 screening funnel from the raw Qualtrics export. The terminal stage equals the strict analytic sample (N = 1,272).")
+```
+
+```{r me-funnel-vals, include=FALSE}
+.an <- fun13 |> dplyr::filter(term == "analytic_sample") |> dplyr::arrange(model)
+.eq <- fun13 |> dplyr::filter(term == "reached_equivocality") |> dplyr::arrange(model)
+```
+
+Both funnels reconcile exactly to the analytic samples (Studies 1–3:
+`r paste(fmt_num(.an$n,0), collapse=" / ")`; Study 4: `r fmt_num(tail(flow4$n_remaining,1),0)`).
+The cleaned Studies 1–3 files begin at the equivocality-classifier stage
+(`r paste(fmt_num(.eq$n,0), collapse=" / ")` rows for Jailbroken / Standard / Truth-Constrained),
+so the upstream attention and bot screens are recovered only from the raw entrant exports.
+
+## Demographics {-}
+
+The coded demographic items are read directly from the analytic frames: race is
+the recoded `ethnicity` item (code 1 = White, non-Hispanic), gender the recoded
+`gender_2`/`gender` item (code 2 = female), age the `age_2`/`age` item (clipped to
+13–100 in Study 4 to drop out-of-range entries), and political ideology the 1–5
+social-conservatism item. These mirror the recodes in the covariate-balance
+generator (`ext_balance.R`).
+
+```{r me-demographics}
+demo_s13 <- function(d) tibble::tibble(
+  pct_white  = mean(suppressWarnings(as.numeric(d$ethnicity)) == 1, na.rm = TRUE),
+  pct_female = mean(suppressWarnings(as.numeric(d$gender_2)) == 2, na.rm = TRUE),
+  mean_age   = mean(suppressWarnings(as.numeric(d$age_2)), na.rm = TRUE),
+  mean_ideol = mean(suppressWarnings(as.numeric(d$social_conservatism)), na.rm = TRUE))
+me_demo <- s13 |>
+  dplyr::group_by(study = as.character(study_factor)) |>
+  dplyr::group_modify(~ demo_s13(.x)) |>
+  dplyr::ungroup()
+s4_age <- { a <- suppressWarnings(as.numeric(s4$age)); ifelse(a >= 13 & a <= 100, a, NA_real_) }
+me_demo <- dplyr::bind_rows(me_demo, tibble::tibble(
+  study      = "Study 4 (frontier models)",
+  pct_white  = mean(suppressWarnings(as.numeric(s4$ethnicity)) == 1, na.rm = TRUE),
+  pct_female = mean(suppressWarnings(as.numeric(s4$gender)) == 2, na.rm = TRUE),
+  mean_age   = mean(s4_age, na.rm = TRUE),
+  mean_ideol = mean(suppressWarnings(as.numeric(s4$SocialConservatism)), na.rm = TRUE)))
+kable(me_demo, digits = c(0, 3, 3, 1, 2),
+      caption = "Sample demographics by study: % White (non-Hispanic), % female, mean age, mean social conservatism (1–5).")
+```
+
+```{r me-demo-vals, include=FALSE}
+gd <- function(s, col) me_demo[[col]][me_demo$study == s]
+```
+
+Participants were predominantly White and slightly more than half female. The
+share White ranged from `r pct(gd("Truth-Constrained","pct_white"),0)`
+(Truth-Constrained) to `r pct(gd("Jailbroken","pct_white"),0)` (Jailbroken), and
+the share female from `r pct(gd("Standard","pct_female"),0)` (Standard) to
+`r pct(gd("Study 4 (frontier models)","pct_female"),0)` (Study 4). Samples skewed
+older in the first two studies (mean age `r mn(gd("Jailbroken","mean_age"))` in
+Study 1 and `r mn(gd("Standard","mean_age"))` in Study 2) and younger in the
+later two (`r mn(gd("Truth-Constrained","mean_age"))` in Study 3 and
+`r mn(gd("Study 4 (frontier models)","mean_age"))` in Study 4). Mean political
+ideology sat near the scale midpoint in every study (social conservatism
+`r mn2(gd("Jailbroken","mean_ideol"))`–`r mn2(gd("Study 4 (frontier models)","mean_ideol"))`
+on the 1–5 scale).
+
+## Attrition does not differ by condition {-}
+
+Assignment to the bunking vs debunking arm is randomized within every study, so
+post-randomization attrition should be independent of condition. For Studies 1–3
+we model dropout — a missing post-conversation belief among the eligible pool
+(equivocal focal description, baseline belief in the 25–75 window, a bunk/debunk
+condition assigned) — as a logistic function of condition, and test it with a
+likelihood-ratio chi-square (mirrors `compute_dropout_logistic_s13`).
+
+Study 4 requires a sharper treatment, because non-completion there is **not** the
+same thing as mid-conversation dropout. We classify every member of the eligible
+pool (passed all strict screens through model assignment) from the continuously
+saved partial-chat transcript (`__js_chatPartialData1`), mirroring
+`compute_attrition_substantive_vs_technical`:
+
+* **completed** — produced post-conversation outcomes (the analytic sample);
+* **substantive mid-conversation dropout** — the model replied at least once and the
+  participant *then* abandoned the study (a genuine, partial transcript exists);
+* **no-message** — the participant reached the chat but never sent a message, so **no
+  partial transcript was ever saved**. This is a technical chat-load failure (not
+  disengagement), overwhelmingly concentrated in Gemini, whose endpoint Google was
+  deprecating during fielding.
+
+The test that bears on whether the analytic samples are differentially shaped is the
+**substantive** one — among participants who actually began the conversation, does
+mid-conversation dropout vary by assigned direction or by model? The technical
+no-message loss is excluded from it.
+
+```{r me-attrition-s13}
+s13_study_map <- c("Study 1" = "Jailbroken", "Study 2" = "Standard", "Study 3" = "Truth-Constrained")
+me_attr_s13 <- purrr::imap_dfr(s13_study_map, function(label, key) {
+  d <- readr::read_csv(paths$s1s3_clean[[key]], show_col_types = FALSE, progress = FALSE) |>
+    dplyr::mutate(
+      .pre  = suppressWarnings(as.numeric(belief_rating_pre_4)),
+      .post = suppressWarnings(as.numeric(belief_rating_post_4)),
+      .pre_rc  = dplyr::if_else(category == "denies", 100 - .pre,  .pre),
+      .post_rc = dplyr::if_else(category == "denies", 100 - .post, .post)) |>
+    dplyr::filter(isEquivocal == TRUE, .pre_rc > 25, .pre_rc < 75,
+                  condition %in% c("treatment_mid_bunk", "treatment_mid_debunk")) |>
+    dplyr::mutate(dropout = as.integer(is.na(.post_rc)),
+                  cond = factor(condition, levels = c("treatment_mid_bunk","treatment_mid_debunk")))
+  f1 <- glm(dropout ~ cond, data = d, family = binomial())
+  f0 <- glm(dropout ~ 1,    data = d, family = binomial())
+  lr <- anova(f0, f1, test = "LRT")
+  tibble::tibble(study = label, n_pool = nrow(d), dropout_rate = mean(d$dropout),
+                 LRT_chisq = lr$Deviance[2], df = lr$Df[2], p = lr$`Pr(>Chi)`[2])
+})
+kable(me_attr_s13, digits = c(0, 0, 3, 3, 0, 3),
+      caption = "Studies 1–3 differential attrition: dropout (missing post belief) ~ condition, LRT.")
+```
+
+```{r me-attrition-s4}
+# S4 pool = entrants passing all strict screens through model assignment. The raw
+# incomplete-outcome loss mixes a technical chat-load failure (a chat that never
+# loaded, concentrated in Gemini) with genuine mid-conversation disengagement. The
+# test that bears on whether the analytic samples are differentially shaped is the
+# SUBSTANTIVE one: among participants who actually began the conversation (the
+# model replied >= once), does mid-conversation dropout vary by condition? We
+# classify each non-completer from the continuously-saved partial-chat log
+# (__js_chatPartialData1), mirroring compute_attrition_substantive_vs_technical.
+parse_partial_counts <- function(cell) {
+  if (is.na(cell) || !nzchar(trimws(cell))) return(c(0L, 0L))
+  ms <- tryCatch({
+    arr <- jsonlite::fromJSON(cell, simplifyVector = TRUE); acc <- list()
+    for (s in arr) { o <- tryCatch(jsonlite::fromJSON(s, simplifyDataFrame = FALSE), error = function(e) NULL)
+                     if (!is.null(o$messages)) acc <- c(acc, o$messages) }
+    acc }, error = function(e) NULL)
+  if (is.null(ms) || !length(ms)) return(c(0L, 0L))
+  role <- vapply(ms, function(m) if (is.null(m$role)) "" else m$role, character(1))
+  cont <- vapply(ms, function(m) if (is.null(m$content)) "" else paste(as.character(m$content), collapse = ""), character(1))
+  c(sum(role == "user" & nchar(trimws(cont)) > 0L), sum(role == "assistant" & nchar(trimws(cont)) > 0L))
+}
+s4_pool <- d4$s4_raw |>
+  dplyr::filter(attention_pass, berry_pass, dedup_pass, condition_assigned, model_assigned,
+                pre_belief_present, pre_post_present, equivocal_pass, !invalid_claim,
+                nonempty(direction), belief_window_pass) |>
+  dplyr::mutate(completed = post_outcomes_present,
+                direction = factor(direction, levels = c("bunk","debunk")),
+                model = model_pooled_label(modelName))
+# Parse the partial-chat log for non-completers: count non-empty user messages and
+# model replies. A conversation that "began" has >=1 model reply.
+s4_pool$n_user <- 0L; s4_pool$n_ai <- 0L
+inc <- which(!s4_pool$completed)
+if (length(inc)) {
+  pcc <- t(vapply(s4_pool[["__js_chatPartialData1"]][inc], parse_partial_counts, integer(2)))
+  s4_pool$n_user[inc] <- pcc[, 1]; s4_pool$n_ai[inc] <- pcc[, 2]
+}
+s4_pool <- s4_pool |>
+  dplyr::mutate(loss_class = dplyr::case_when(
+    completed   ~ "completed",
+    n_ai > 0    ~ "substantive_midchat",    # model replied >=1x, then participant abandoned
+    n_user > 0  ~ "technical_no_reply",     # sent a message, model never replied (~0)
+    TRUE        ~ "no_message"))            # reached chat, never sent a message -> NO partial transcript (technical)
+
+# Loss classification BY MODEL (+ pooled), with the substantive dropout rate among
+# those who engaged (completed + substantive_midchat).
+s4_loss_by_model <- s4_pool |>
+  dplyr::count(model, loss_class) |>
+  tidyr::pivot_wider(names_from = loss_class, values_from = n, values_fill = 0)
+for (c in c("completed","substantive_midchat","technical_no_reply","no_message"))
+  if (!c %in% names(s4_loss_by_model)) s4_loss_by_model[[c]] <- 0L
+s4_loss_by_model <- s4_loss_by_model |>
+  dplyr::transmute(model, pool = completed + substantive_midchat + technical_no_reply + no_message,
+                   completed, no_message_technical = no_message, substantive_midchat,
+                   substantive_rate = substantive_midchat / (completed + substantive_midchat)) |>
+  dplyr::bind_rows(dplyr::summarise(s4_pool |> dplyr::mutate(lc = loss_class),
+    model = "ALL", pool = dplyr::n(), completed = sum(lc == "completed"),
+    no_message_technical = sum(lc == "no_message"), substantive_midchat = sum(lc == "substantive_midchat"),
+    substantive_rate = sum(lc == "substantive_midchat") / sum(lc %in% c("completed","substantive_midchat"))))
+kable(s4_loss_by_model, digits = c(0,0,0,0,0,3),
+      caption = "Study 4 conversation-pool loss classification, by model. no_message = reached the chat but never sent a message (no partial transcript saved; technical chat-load failure). substantive_midchat = a partial transcript exists (model replied) but the participant abandoned mid-conversation.")
+
+# Tests. Raw non-completion (includes technical loss) by model + by direction; and
+# the SUBSTANTIVE mid-conversation dropout among the engaged, by direction + by model.
+s4_pool <- s4_pool |> dplyr::mutate(incomplete = as.integer(!completed))
+raw_mod <- anova(glm(incomplete ~ 1, data = s4_pool, family = binomial()),
+                 glm(incomplete ~ model, data = s4_pool, family = binomial()), test = "LRT")
+engaged <- s4_pool |> dplyr::filter(loss_class %in% c("completed","substantive_midchat")) |>
+  dplyr::mutate(sub_dropout = as.integer(loss_class == "substantive_midchat"))
+sub_dir <- anova(glm(sub_dropout ~ 1, data = engaged, family = binomial()),
+                 glm(sub_dropout ~ direction, data = engaged, family = binomial()), test = "LRT")
+sub_mod <- anova(glm(sub_dropout ~ 1, data = engaged, family = binomial()),
+                 glm(sub_dropout ~ model, data = engaged, family = binomial()), test = "LRT")
+me_attr_s4 <- tibble::tibble(
+  test = c("raw non-completion ~ model (incl. technical loss)",
+           "substantive mid-conversation dropout ~ direction (engaged)",
+           "substantive mid-conversation dropout ~ model (engaged)"),
+  n = c(nrow(s4_pool), nrow(engaged), nrow(engaged)),
+  LRT_chisq = c(raw_mod$Deviance[2], sub_dir$Deviance[2], sub_mod$Deviance[2]),
+  df = c(raw_mod$Df[2], sub_dir$Df[2], sub_mod$Df[2]),
+  p = c(raw_mod$`Pr(>Chi)`[2], sub_dir$`Pr(>Chi)`[2], sub_mod$`Pr(>Chi)`[2]))
+me_attr_s4
+```
+
+```{r me-attr-s4-vals, include=FALSE}
+A   <- s4_loss_by_model |> dplyr::filter(model == "ALL")
+gem <- s4_loss_by_model |> dplyr::filter(model == "Gemini")
+sdir <- me_attr_s4[2, ]; smod <- me_attr_s4[3, ]
+```
+
+In Studies 1–3, post-randomization attrition was unrelated to condition: the
+dropout-by-condition likelihood-ratio tests were all non-significant
+(smallest *p* = `r P(min(me_attr_s13$p))`; overall dropout rates
+`r pct(me_attr_s13$dropout_rate[1])`/`r pct(me_attr_s13$dropout_rate[2])`/`r pct(me_attr_s13$dropout_rate[3])`).
+
+In Study 4, of the `r fmt_num(A$pool,0)` participants who passed every screen and were
+assigned a model, `r fmt_num(A$completed,0)` completed. The remaining loss is
+overwhelmingly **technical, not disengagement**: `r fmt_num(A$no_message_technical,0)`
+reached the chat but never sent a message — leaving no partial transcript — and these
+are concentrated in Gemini (`r fmt_num(gem$no_message_technical,0)` of
+`r fmt_num(gem$pool,0)`), whose endpoint was being deprecated during fielding (raw
+non-completion thus differs sharply by model, χ²(`r me_attr_s4$df[1]`) =
+`r mn2(me_attr_s4$LRT_chisq[1])`, `r P(me_attr_s4$p[1])`). Only
+`r fmt_num(A$substantive_midchat,0)` participants across all four models had a partial
+transcript (the model replied) and then abandoned the conversation
+(`r pct(A$substantive_rate)` of the `r fmt_num(sdir$n,0)` who engaged). This genuine
+mid-conversation dropout did not differ by assigned direction
+(χ²(`r sdir$df`) = `r mn2(sdir$LRT_chisq)`, `r P(sdir$p)`) or by model
+(χ²(`r smod$df`) = `r mn2(smod$LRT_chisq)`, `r P(smod$p)`). The analytic samples are
+therefore not differentially shaped by condition- or model-dependent disengagement.
+
+## Conversation descriptives {-}
+
+Engagement is summarized from the transcripts so that exposure can be compared
+across studies. For Studies 1–3, message counts and word counts are computed from
+the parsed `content_user_*` / `content_assistant_*` columns of the analytic frame
+(messages = non-empty cells; words = whitespace tokens), exactly as in
+`compute_engagement`. Conversation duration is the elapsed time of the last
+message (`createdAt`, seconds from conversation start) parsed from the
+`chathistory0*` JSON. Substantive claims per conversation is the mean number of
+fact-checked claims per conversation from the claim-extraction census
+(`claim_counts_full`).
+
+```{r me-convo-s13}
+ucols <- grep("^content_user_[0-9]+$",      names(s13), value = TRUE)
+acols <- grep("^content_assistant_[0-9]+$", names(s13), value = TRUE)
+ne  <- function(x) !is.na(x) & nzchar(trimws(as.character(x)))
+wc  <- function(x) vapply(ifelse(is.na(x), "", as.character(x)),
+                          function(s) { s <- trimws(s); if (!nzchar(s)) 0L else length(strsplit(s, "\\s+")[[1]]) },
+                          integer(1), USE.NAMES = FALSE)
+# parse one chathistory cell -> messages list (mirrors .ext_parse_s4_transcript for S1-3 single-string form)
+parse_chat <- function(ch) {
+  s <- ch
+  if (startsWith(s, '"')) s <- substr(s, 2, nchar(s))
+  if (endsWith(s,   '"')) s <- substr(s, 1, nchar(s) - 1)
+  s <- gsub('\\\\"', '"', s); s <- gsub('\\\\\\\\', '\\\\', s)
+  p <- tryCatch(jsonlite::fromJSON(s, simplifyVector = FALSE), error = function(e) NULL)
+  if (is.character(p)) p <- tryCatch(jsonlite::fromJSON(p, simplifyVector = FALSE), error = function(e) NULL)
+  if (is.list(p) && !is.null(p$messages)) p$messages else NULL
+}
+chcols13 <- intersect(paste0("chathistory0", 1:5), names(s13))
+conv_dur_min <- function(row) {
+  msgs <- parse_chat(paste0(unlist(row[chcols13]), collapse = ""))
+  if (is.null(msgs)) return(NA_real_)
+  ca <- suppressWarnings(as.numeric(vapply(msgs, function(m) if (is.null(m$createdAt)) NA_character_ else as.character(m$createdAt), character(1))))
+  if (all(is.na(ca))) return(NA_real_)
+  (max(ca, na.rm = TRUE) - min(ca, na.rm = TRUE)) / 60
+}
+s13d <- s13 |>
+  dplyr::mutate(.n_user = rowSums(dplyr::across(dplyr::all_of(ucols), ne)),
+                .w_user = rowSums(dplyr::across(dplyr::all_of(ucols), wc)),
+                .w_asst = rowSums(dplyr::across(dplyr::all_of(acols), wc)))
+s13d$.cdur <- vapply(seq_len(nrow(s13d)), function(i) conv_dur_min(s13d[i, ]), numeric(1))
+me_convo_s13 <- s13d |>
+  dplyr::group_by(study = as.character(study_factor)) |>
+  dplyr::summarise(mean_user_msgs = mean(.n_user), mean_user_words = mean(.w_user),
+                   mean_asst_words = mean(.w_asst), median_dur_min = median(.cdur, na.rm = TRUE),
+                   .groups = "drop")
+me_convo_s13
+```
+
+```{r me-convo-s4}
+# robust reconstruction of an S4 chunked-JSON transcript (mirrors .ext_parse_s4_transcript):
+# chathistory0* are successive fragments of one escaped JSON string literal.
+parse_s4_transcript <- function(chunks) {
+  chunks <- chunks[!is.na(chunks) & nzchar(chunks)]
+  if (!length(chunks)) return(NULL)
+  inner <- vapply(chunks, function(s) {
+    if (startsWith(s, '"')) s <- substr(s, 2, nchar(s))
+    if (endsWith(s, '"'))   s <- substr(s, 1, nchar(s) - 1)
+    s }, character(1), USE.NAMES = FALSE)
+  j <- paste0(inner, collapse = "")
+  j <- gsub('\\\\"', '"', j); j <- gsub('\\\\\\\\', '\\\\', j)
+  p <- tryCatch(jsonlite::fromJSON(j, simplifyVector = FALSE), error = function(e) NULL)
+  if (is.character(p)) p <- tryCatch(jsonlite::fromJSON(p, simplifyVector = FALSE), error = function(e) NULL)
+  if (is.list(p) && !is.null(p$messages)) p$messages else NULL
+}
+chat_cols <- intersect(paste0("chathistory0", 1:5), names(s4))
+s4_msgs <- lapply(seq_len(nrow(s4)), function(i) parse_s4_transcript(as.character(unlist(s4[i, chat_cols]))))
+s4_metrics <- purrr::map_dfr(s4_msgs, function(m) {
+  if (is.null(m)) return(tibble::tibble(n_user = NA, w_asst = NA, dur = NA_real_))
+  roles <- vapply(m, function(x) if (!is.null(x$role)) x$role else NA_character_, character(1))
+  cont  <- vapply(m, function(x) if (!is.null(x$content)) as.character(x$content) else "", character(1))
+  ca    <- suppressWarnings(as.numeric(vapply(m, function(x) if (is.null(x$createdAt)) NA_character_ else as.character(x$createdAt), character(1))))
+  tibble::tibble(n_user = sum(roles == "user", na.rm = TRUE),
+                 w_asst = sum(wc(cont[roles == "assistant"])),
+                 dur = if (all(is.na(ca))) NA_real_ else (max(ca, na.rm = TRUE) - min(ca, na.rm = TRUE)) / 60)
+})
+me_convo_s4 <- tibble::tibble(
+  study = "Study 4 (frontier models)",
+  mean_user_msgs = mean(s4_metrics$n_user, na.rm = TRUE),
+  mean_asst_words = mean(s4_metrics$w_asst, na.rm = TRUE),
+  median_dur_min = median(s4_metrics$dur, na.rm = TRUE))
+me_convo_s4
+```
+
+```{r me-substantive-claims}
+# Load the assembled all_numbers table using the same robust pattern as the SI docs
+# (supplement/Bunkbot_SI.Rmd): reuse the cached engine build if present and readable,
+# otherwise build it live (API-free) and cache it. This makes the render work on a
+# fresh checkout, where output/ is empty (the .rds is a gitignored build artifact).
+source(file.path(REPO_ROOT, "code", "R", "build_all_numbers.R"))
+nums_an <- load_or_build_all_numbers(REPO_ROOT)$all_numbers
+me_subst <- nums_an |>
+  dplyr::filter(block == "claim_counts_full", term == "mean_factchecked_per_conv",
+                sample == "cached_api_claims",
+                model %in% c("Study1", "Study2", "Study3", "Study4"), is.na(direction)) |>
+  dplyr::transmute(study = dplyr::recode(model, Study1 = "Jailbroken", Study2 = "Standard",
+                                         Study3 = "Truth-Constrained", Study4 = "Study 4 (frontier models)"),
+                   substantive_claims_per_conv = estimate)
+me_subst
+```
+
+```{r me-convo-vals, include=FALSE}
+gc13 <- function(s, col) me_convo_s13[[col]][me_convo_s13$study == s]
+gsub_ <- function(s) me_subst$substantive_claims_per_conv[me_subst$study == s]
+```
+
+Conversations were short multi-turn exchanges. Participants sent on average
+`r mn(gc13("Jailbroken","mean_user_msgs"))`–`r mn(gc13("Standard","mean_user_msgs"))`
+messages in Studies 1–3 and `r mn(me_convo_s4$mean_user_msgs)` in Study 4, writing
+roughly `r fmt_num(gc13("Jailbroken","mean_user_words"),0)`–`r fmt_num(gc13("Truth-Constrained","mean_user_words"),0)`
+words. The assistant produced far more text, and markedly more under the
+later-study models: a mean of `r fmt_num(gc13("Jailbroken","mean_asst_words"),0)`
+assistant words per conversation in Study 1, about
+`r fmt_num(gc13("Standard","mean_asst_words"),0)` and
+`r fmt_num(gc13("Truth-Constrained","mean_asst_words"),0)` in Studies 2 and 3, and
+`r fmt_num(me_convo_s4$mean_asst_words,0)` in Study 4. Each conversation contained
+`r mn(gsub_("Jailbroken"))`/`r mn(gsub_("Standard"))`/`r mn(gsub_("Truth-Constrained"))`/`r mn(gsub_("Study 4 (frontier models)"))`
+fact-checked substantive claims (Studies 1–4). Median conversation duration was
+`r mn(gc13("Jailbroken","median_dur_min"))`/`r mn(gc13("Standard","median_dur_min"))`/`r mn(gc13("Truth-Constrained","median_dur_min"))`
+minutes in Studies 1–3 and `r mn(me_convo_s4$median_dur_min)` minutes in Study 4.
+
+## Claim extraction and fact-checking volume {-}
+
+The veracity pipeline extracted discrete factual claims from every assistant
+turn and fact-checked the substantive ones. The reported totals are restricted to
+the analytic samples. For Studies 1–3 the per-conversation extraction files
+(`*_nfacts_veracity.jsonl`) are read and a claim counts as fact-checked when its
+`veracity_request_status == "success"`; we join to the analytic frame by
+`ResponseId`. For Study 4 the per-conversation claim census in the master dataset
+(`all_claims_total`, `factcheck_scored_n`) is summed over the strict sample
+(mirrors `compute_claim_counts_full`).
+
+```{r me-claims-s13}
+me_claims_s13 <- purrr::map_dfr(1:3, function(st) {
+  ls   <- readLines(paths$nfacts[[paste0("Study", st)]], warn = FALSE)
+  recs <- lapply(ls, jsonlite::fromJSON)
+  rid  <- vapply(recs, function(x) if (is.null(x$ResponseId)) NA_character_ else as.character(x$ResponseId), character(1))
+  vok  <- vapply(recs, function(x) !is.null(x$veracity_request_status) &&
+                   identical(as.character(x$veracity_request_status), "success"), logical(1))
+  tibble::tibble(study = c("Jailbroken","Standard","Truth-Constrained")[st],
+                 fact_checked_analytic = sum(vok & rid %in% s13$response_id))
+})
+me_claims_s13
+s13_factchecked_total <- sum(me_claims_s13$fact_checked_analytic)
+s13_factchecked_total
+```
+
+```{r me-claims-s4}
+ids4 <- as.character(s4$ResponseId)
+idcol <- if ("conversation_id" %in% names(d4$s4_master)) "conversation_id" else "ResponseId"
+m_anal <- d4$s4_master[as.character(d4$s4_master[[idcol]]) %in% ids4, ]
+me_claims_s4 <- tibble::tibble(
+  s4_conversations = nrow(m_anal),
+  extracted  = sum(m_anal$all_claims_total,   na.rm = TRUE),
+  factchecked = sum(m_anal$factcheck_scored_n, na.rm = TRUE))
+me_claims_s4
+```
+
+Across Studies 1–3, `r fmt_num(s13_factchecked_total,0)` extracted claims in the
+analytic-sample conversations received a fact-check score. In Study 4 the four
+frontier models produced `r fmt_num(me_claims_s4$extracted,0)` extracted claims
+across the `r fmt_num(me_claims_s4$s4_conversations,0)` analytic conversations, of
+which `r fmt_num(me_claims_s4$factchecked,0)` were fact-checked.
+
+## Five-rater post-stance reliability {-}
+
+Every Study-4 pre- and post-conversation social-media post is scored by a
+five-model consensus rater drawn from five developers
+(`claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `grok-4.3`, `deepseek-v3.2`).
+Reliability is computed live from the per-rater 0–100 `stance_score` columns in
+the consolidated stance file: the interval Krippendorff's α, the two-way ICC(2,k),
+and the mean pairwise inter-rater correlation. Off-topic and declined post rates
+are the post-conversation consensus `focal_relevance == "other_topic"` and
+`response_type == "declines_to_post"` shares (cross-checked against the
+`stance_reliability` block).
+
+```{r me-stance-reliability}
+sv <- readr::read_csv(paths$s4_stance_v2, show_col_types = FALSE, progress = FALSE)
+raters <- c("claude_stance_score","gpt_stance_score","gemini_stance_score","grok_stance_score","deepseek_stance_score")
+M <- as.matrix(sv[, raters]); storage.mode(M) <- "numeric"
+alpha_interval <- irr::kripp.alpha(t(M), method = "interval")$value
+icc2k <- { ic <- psych::ICC(M, missing = FALSE, lmer = FALSE); ic$results$ICC[ic$results$type == "ICC2k"] }
+cm <- cor(M, use = "pairwise.complete.obs"); pairwise_r <- mean(cm[upper.tri(cm)])
+me_rel <- tibble::tibble(
+  n_rated_items = nrow(sv),
+  krippendorff_alpha_interval = alpha_interval,
+  ICC_2k = icc2k,
+  mean_pairwise_r = pairwise_r)
+me_rel
+```
+
+```{r me-stance-composition}
+post <- sv |> dplyr::filter(timepoint == "post")
+me_comp <- tibble::tibble(
+  n_post = nrow(post),
+  pct_off_topic = mean(post$consensus_focal_relevance == "other_topic", na.rm = TRUE),
+  pct_declining = mean(post$consensus_response_type == "declines_to_post", na.rm = TRUE))
+me_comp
+```
+
+Inter-rater agreement was high: across the `r fmt_num(me_rel$n_rated_items,0)`
+rated post items the interval Krippendorff's α was
+`r mn2(me_rel$krippendorff_alpha_interval)`, the two-way ICC(2,k) was
+`r mn2(me_rel$ICC_2k)`, and the mean pairwise correlation among raters was
+`r mn2(me_rel$mean_pairwise_r)`. Among post-conversation posts, only
+`r pct(me_comp$pct_off_topic)` were scored as off-topic and
+`r pct(me_comp$pct_declining)` as declining to post; these were flagged for the
+composition tables and assigned the neutral midpoint in the direction-coded
+continuous analyses. Annotation inter-rater agreement for the APE compliance
+labels — reported as 84% agreement and a Cohen's κ of 0.66 — is carried over from
+the APE instrument's original validation (Kowal et al., 2025, arXiv:2506.02873)
+and is not recomputed here.
+
+## Topic taxonomy {-}
+
+To ask whether persuasion effects concentrate in recognizable conspiracy
+families, the pooled focal descriptions were clustered into topics with a fixed,
+fully specified embedding → PCA → HDBSCAN procedure. The number of interpretable
+topics and the size of the residual "Mixed / Unclassified" bucket are read from
+the canonical cached assignment table (`topic_assignments.csv`; cross-checked
+against the `topic_effects` block).
+
+```{r me-topics}
+ta <- readr::read_csv(paths$topic_assignments, show_col_types = FALSE, progress = FALSE)
+n_topics_named <- ta |>
+  dplyr::filter(topic != "Mixed / Unclassified") |>
+  dplyr::distinct(topic) |> nrow()
+pct_mixed <- mean(ta$topic == "Mixed / Unclassified")
+me_topics <- tibble::tibble(n_corpus = nrow(ta), n_named_topics = n_topics_named, pct_mixed = pct_mixed)
+me_topics
+```
+
+The selected solution yields `r fmt_num(me_topics$n_named_topics,0)` named,
+interpretable density clusters (e.g. "Moon Landing Hoax", "9/11 Inside Job",
+"Vaccines Cause Autism") plus a residual Mixed / Unclassified bucket that absorbs
+HDBSCAN noise points and any cluster below the size floor; the Mixed bucket
+accounts for `r pct(me_topics$pct_mixed)` of the
+`r fmt_num(me_topics$n_corpus,0)`-description pooled corpus.

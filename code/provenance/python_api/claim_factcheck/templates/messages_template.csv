@@ -1,0 +1,2 @@
+conversation_id,message_id,role,content,turn_index,condition,study_id,participant_id,message_timestamp,topic
+conv_001,conv_001_turn_1,assistant,"Vaccines undergo multiple phases of testing before approval.",1,Full Dialogue,study_a,p_001,2026-01-01T12:00:00,vaccines

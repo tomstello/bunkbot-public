@@ -1,0 +1,302 @@
+---
+title: "Bunkbot — reproducible Results & Methods"
+subtitle: "Every reported statistic recomputed live from the raw data, with the analysis code, full model output, and assumption checks exposed"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  bookdown::html_document2:
+    toc: true
+    toc_depth: 4
+    toc_float: true
+    number_sections: true
+    df_print: kable
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, comment = "#>")
+REPO_ROOT <- tryCatch(normalizePath(dirname(knitr::current_input(dir = TRUE))),
+                      error = function(e) normalizePath("."))
+if (!file.exists(file.path(REPO_ROOT, "code", "bunkbot_helpers.R"))) REPO_ROOT <- normalizePath(".")
+
+suppressPackageStartupMessages({
+  library(dplyr); library(tidyr); library(broom); library(sandwich)
+  library(lmtest); library(knitr); library(purrr); library(tibble)
+})
+source(file.path(REPO_ROOT, "code", "bunkbot_helpers.R"))   # engine: build_s1s3 + inference helpers
+source(file.path(REPO_ROOT, "code", "R", "formatting.R"))   # fmt_num / fmt_p / fmt_ci
+
+paths <- pkg_paths(REPO_ROOT)
+s13   <- build_s1s3(paths, duration_filter = FALSE)          # canonical no-duration sample (1092/814/818)
+
+# ---- inline formatters (en-dash minus; consistent rounding) ----------------
+mn  <- function(x) sub("-", "−", formatC(as.numeric(x), format = "f", digits = 1))
+mn2 <- function(x) sub("-", "−", formatC(as.numeric(x), format = "f", digits = 2))
+ci  <- function(lo, hi) sprintf("[%s, %s]", mn(lo), mn(hi))
+P   <- function(p) fmt_p(p)
+pct <- function(x, d = 1) paste0(formatC(100 * as.numeric(x), format = "f", digits = d), "%")
+hc3 <- function(m) sandwich::vcovHC(m, type = "HC3")
+
+# ---- baseline-adjusted (ANCOVA) marginal means / contrasts ------------------
+# G-computation over the fitted model; reuses the engine's model_matrix_for_fit()
+# + linear_combo() — identical machinery to code/R/build_all_numbers.R (dev_qa
+# anchors). Works for any model form; the S1-3 belief models are additive ANCOVAs
+# (change ~ condition + baseline), so a cell is the adjusted mean at mean baseline.
+lin_cell <- function(mod, dat, level, vc) {
+  nd <- dat; nd$condition_factor <- factor(level, levels = levels(dat$condition_factor))
+  linear_combo(mod, colMeans(model_matrix_for_fit(mod, nd)), vc = vc)
+}
+lin_contrast <- function(mod, dat, a, b, vc) {
+  nda <- dat; nda$condition_factor <- factor(a, levels = levels(dat$condition_factor))
+  ndb <- dat; ndb$condition_factor <- factor(b, levels = levels(dat$condition_factor))
+  w <- colMeans(model_matrix_for_fit(mod, nda)) - colMeans(model_matrix_for_fit(mod, ndb))
+  linear_combo(mod, w, vc = vc)
+}
+# within-condition raw change summary: mean, paired CI, Cohen's dz, Hedges g (pooled pre SD), % change
+within_summary <- function(dat) {
+  sp <- dat |> group_by(condition_factor) |>
+    summarise(n = n(), v = var(belief_rating_pre_rc), .groups = "drop") |>
+    summarise(x = sqrt(sum((n - 1) * v) / (sum(n) - n()))) |> pull(x)
+  dat |> group_by(condition_factor) |>
+    summarise(n = n(), pre = mean(belief_rating_pre_rc), m = mean(change), s = sd(change), .groups = "drop") |>
+    mutate(se = s / sqrt(n), lo = m - qt(.975, n - 1) * se, hi = m + qt(.975, n - 1) * se,
+           dz = m / s, J = 1 - 3 / (4 * (n - 1) - 1), g = J * (m / sp), pct_change = m / pre)
+}
+# two-sample Cohen's d for a numeric item by condition (+ Welch t-test)
+cohen_d2 <- function(dat, item) {
+  x <- dat[[item]][dat$condition_factor == "Bunking"];   x <- x[!is.na(x)]
+  y <- dat[[item]][dat$condition_factor == "Debunking"]; y <- y[!is.na(y)]
+  sp <- sqrt(((length(x) - 1) * var(x) + (length(y) - 1) * var(y)) / (length(x) + length(y) - 2))
+  tt <- t.test(x, y)
+  tibble(mBunk = mean(x), mDebunk = mean(y), d = (mean(x) - mean(y)) / sp,
+         t = unname(tt$statistic), df = unname(tt$parameter), p = tt$p.value)
+}
+# perception recodes to native metric (same maps as the Study-4 instrument)
+recode_perceptions <- function(df) df |> mutate(
+  arg_strength_rc = suppressWarnings(as.numeric(arg_strength)),
+  new_info_rc = case_when(new_info==1~1, new_info==4~2, new_info==5~3, new_info==6~4,
+                          new_info==7~5, new_info==8~6, new_info==9~7, new_info==10~8,
+                          new_info==11~9, new_info==12~10, TRUE~NA_real_),
+  collaborative_rc = case_when(collaborative==69~-2, collaborative==70~-1, collaborative==71~0,
+                               collaborative==72~1, collaborative==73~2, TRUE~NA_real_),
+  unbiased_rc = case_when(unbiased==69~-2, unbiased==70~-1, unbiased==71~0,
+                          unbiased==72~1, unbiased==73~2, TRUE~NA_real_))
+# GCBS 7-item row means (pre/post) -> change
+add_gcbs <- function(df) {
+  gp <- paste0("x", c(2,4,6,8,10,12,14), "_gcbs_pre"); go <- sub("_pre$","_post",gp)
+  pm <- sapply(gp, function(c) suppressWarnings(as.numeric(df[[c]])))
+  qm <- sapply(go, function(c) suppressWarnings(as.numeric(df[[c]])))
+  df$GCBS_pre  <- ifelse(rowSums(is.na(pm))==0, rowMeans(pm), NA_real_)
+  df$GCBS_post <- ifelse(rowSums(is.na(qm))==0, rowMeans(qm), NA_real_)
+  df$GCBS_change <- df$GCBS_post - df$GCBS_pre
+  df
+}
+```
+
+# How to read this document {-}
+
+This is a fully reproducible computation of every statistic reported in the **Results** and
+**Methods**. The prose is the manuscript text; every number in it is generated live from the
+raw data (`r format(Sys.Date(), '%B %Y')` build). For each estimate we expose the analysis
+code and show, where applicable, the **full coefficient table**, an **assumption check**
+(heteroscedasticity, which motivates the HC3 robust standard errors used throughout), and
+**both the baseline-adjusted (preregistered) and the unadjusted specifications**. Belief
+change is direction-aligned (positive = movement toward the model's assigned position).
+Samples are the canonical no-duration-filter samples (Studies 1–3: 1,092 / 814 / 818).
+
+```{r child = "code/sections/methods.Rmd"}
+```
+
+# Results {-}
+
+# Study 1 — Jailbroken GPT-4o {#s1}
+
+```{r s1-data}
+s1 <- s13 |> filter(study_factor == "Jailbroken") |> droplevels() |> recode_perceptions() |> add_gcbs()
+nrow(s1)
+```
+
+In Study 1, *N* = `r fmt_num(nrow(s1),0)` (after pre-registered exclusions) participants
+interacted with a jailbreak-tuned variant of GPT-4o.
+
+## Attempt-to-Persuade (APE) compliance {-}
+
+```{r s1-ape}
+s1_ape <- s1 |> group_by(condition_factor) |>
+  summarise(n = n(),
+            attempt_rate = mean(evaluator_label == 1, na.rm = TRUE),
+            paired_rate  = mean(evaluator_label == 1 & reverse_evaluator_label == 1, na.rm = TRUE),
+            .groups = "drop")
+s1_ape
+```
+
+The jailbroken model consistently complied: APE attempt rate
+= `r pct(s1_ape$attempt_rate[s1_ape$condition_factor=="Bunking"],0)` in bunking and
+`r pct(s1_ape$attempt_rate[s1_ape$condition_factor=="Debunking"],0)` in debunking.
+
+## Belief change {-}
+
+### Baseline-adjusted ANCOVA (condition + baseline; HC3) {-}
+
+```{r s1-belief-adj}
+m_s1 <- lm(change ~ condition_factor + belief_rating_pre_rc, data = s1)
+coeftest(m_s1, vcov. = hc3(m_s1))                 # full coefficient table (HC3)
+lmtest::bptest(m_s1)                               # heteroscedasticity check -> motivates HC3
+```
+
+```{r s1-belief-adj-cells}
+V_s1 <- hc3(m_s1)
+s1_adj <- bind_rows(
+  Bunking   = as_tibble(lin_cell(m_s1, s1, "Bunking",   V_s1)),
+  Debunking = as_tibble(lin_cell(m_s1, s1, "Debunking", V_s1)), .id = "condition") |>
+  select(condition, estimate, conf.low, conf.high, p.value)
+s1_ct_adj <- lin_contrast(m_s1, s1, "Bunking", "Debunking", V_s1)   # bunk vs debunk (adjusted)
+kable(s1_adj, digits = 3, caption = "Study 1 belief change — adjusted marginal means (ANCOVA, HC3).")
+s1_ct_adj
+```
+
+### Unadjusted specification {-}
+
+```{r s1-belief-unadj}
+m_s1u <- lm(change ~ condition_factor, data = s1)
+coeftest(m_s1u, vcov. = hc3(m_s1u))                # unadjusted, HC3
+s1_raw <- within_summary(s1)                       # raw within-condition means, dz, Hedges g, % change
+kable(s1_raw |> select(condition_factor, n, pre, m, lo, hi, dz, g, pct_change),
+      digits = 3, caption = "Study 1 belief change — raw (unadjusted) within-condition summary.")
+```
+
+```{r s1-belief-vals, include=FALSE}
+bunk <- s1_raw |> filter(condition_factor == "Bunking")
+deb  <- s1_raw |> filter(condition_factor == "Debunking")
+z_s1 <- s1_ct_adj$estimate / s1_ct_adj$std.error
+p_deb <- t.test(s1$change[s1$condition_factor=="Debunking"])$p.value
+p_bunk <- t.test(s1$change[s1$condition_factor=="Bunking"])$p.value
+```
+
+In the debunking condition, focal-conspiracy belief (0–100; M~Pre~ = `r mn2(deb$pre)`) moved
+`r mn(deb$m)` points in the intended direction (95% CI `r ci(deb$lo, deb$hi)`, `r P(p_deb)`,
+a `r pct(deb$pct_change)` change, *g* = `r mn2(deb$g)`). Belief in the bunking condition
+increased by `r mn(bunk$m)` points (95% CI `r ci(bunk$lo, bunk$hi)`, *g* = `r mn2(bunk$g)`,
+`r pct(bunk$pct_change)` change, `r P(p_bunk)`). The bunking and debunking magnitudes did not
+differ significantly (adjusted contrast = `r mn2(s1_ct_adj$estimate)`,
+*z* = `r mn2(z_s1)`, `r P(s1_ct_adj$p.value)`).
+
+## Distribution of belief change {-}
+
+```{r s1-dist}
+cb <- s1$change[s1$condition_factor == "Bunking"];   cb <- cb[!is.na(cb)]
+cd <- s1$change[s1$condition_factor == "Debunking"]; cd <- cd[!is.na(cd)]
+ks_s1  <- ks.test(cb, cd); ks_s1
+chi_s1 <- chisq.test(table(s1$condition_factor, s1$change >= 40)); chi_s1
+ge40 <- c(bunk = mean(cb >= 40), debunk = mean(cd >= 40)); ge40
+```
+
+The full distributions differed (Kolmogorov–Smirnov *D* = `r mn2(ks_s1$statistic)`, `r P(ks_s1$p.value)`):
+debunking induced a ≥40-point shift in `r pct(ge40["debunk"],0)` of participants vs
+`r pct(ge40["bunk"],0)` for bunking (χ² = `r mn2(chi_s1$statistic)`, `r P(chi_s1$p.value)`).
+
+## Corrective debrief {-}
+
+```{r s1-debrief}
+sb <- s1 |> filter(condition_factor == "Bunking", !is.na(belief_rating_debrf_rc))
+shift_s1 <- t.test(sb$belief_rating_debrf_rc - sb$belief_rating_post_rc)   # post -> debrief
+net_s1   <- t.test(sb$belief_rating_debrf_rc - sb$belief_rating_pre_rc)    # baseline -> debrief
+shift_s1; net_s1
+```
+
+The debrief reduced belief by `r mn(abs(shift_s1$estimate))` points relative to post-bunking
+(*t* = `r mn2(abs(shift_s1$statistic))`, `r P(shift_s1$p.value)`); afterward, belief sat
+`r mn2(abs(net_s1$estimate))` points below baseline (*t* = `r mn2(net_s1$statistic)`, `r P(net_s1$p.value)`).
+
+## Trust in AI {-}
+
+`trust2` (post) − `genai_trust` (pre), 1–7 scale. Within-condition effects use Cohen's *dz*
+(mean change / SD of change) and Hedges *g* (mean change / pooled pre-treatment SD; the
+manuscript's reported standardized effect). The between-condition difference is shown both
+unadjusted (raw bunk−debunk) and baseline-adjusted (controlling for pre-treatment trust),
+each with HC3 robust standard errors.
+
+```{r s1-trust}
+s1t <- s1 |> mutate(trust_change = trust2 - genai_trust,
+                    dir = factor(if_else(condition_factor=="Bunking","bunk","debunk"),
+                                 levels = c("debunk","bunk"))) |>
+  filter(!is.na(trust_change))
+sp_trust <- s1t |> group_by(condition_factor) |>
+  summarise(n=n(), v=var(genai_trust, na.rm=TRUE), .groups="drop") |>
+  summarise(x = sqrt(sum((n-1)*v)/(sum(n)-n()))) |> pull(x)
+trust_cell <- s1t |> group_by(condition_factor) |>
+  summarise(n=n(), m=mean(trust_change), s=sd(trust_change), dz=m/s, g=m/sp_trust, .groups="drop")
+trust_cell
+trust_fit  <- lm(trust_change ~ dir, data = s1t)                 # unadjusted contrast
+trust_fita <- lm(trust_change ~ dir + genai_trust, data = s1t)   # baseline-adjusted contrast
+coeftest(trust_fit,  vcov. = hc3(trust_fit))
+coeftest(trust_fita, vcov. = hc3(trust_fita))
+```
+
+```{r s1-trust-vals, include=FALSE}
+trust_ct <- hc3_tidy(trust_fit) |> filter(term=="dirbunk")
+tcb <- trust_cell |> filter(condition_factor=="Bunking"); tcd <- trust_cell |> filter(condition_factor=="Debunking")
+```
+
+Both conditions increased trust in AI, with bunking doing so significantly more
+(Δ~Bunk~ = `r mn2(tcb$m)`, *g* = `r mn2(tcb$g)`; Δ~Debunk~ = `r mn2(tcd$m)`, *g* = `r mn2(tcd$g)`;
+between-condition *g* = `r mn2(trust_ct$estimate/sp_trust)`, `r P(trust_ct$p.value)`).
+
+## AI-perception judgments {-}
+
+The four items are on heterogeneous native scales, so each is recoded to its intended metric
+(argument strength 1–5; "new information" 1–10; collaborative and unbiased sliders −2…2). We
+report two-sample Cohen's *d* (bunking vs debunking) and the HC3 condition contrast from
+`lm(item ~ dir)` for each.
+
+```{r s1-perceptions}
+perc_items <- c(`Argument strength`="arg_strength_rc", `Provided new information`="new_info_rc",
+                `Collaborativeness`="collaborative_rc", `Impartiality (unbiased)`="unbiased_rc")
+s1_perc <- bind_rows(lapply(perc_items, function(it) cohen_d2(s1, it)), .id = "outcome")
+kable(s1_perc, digits = 3, caption = "Study 1 perception judgments — recoded items, two-sample d.")
+# HC3 condition contrasts (full coefficient view), one model per item
+s1_perc_fits <- lapply(perc_items, function(it) {
+  d <- s1 |> mutate(dir = factor(if_else(condition_factor=="Bunking","bunk","debunk"), levels=c("debunk","bunk")))
+  hc3_tidy(lm(reformulate("dir", it), data = d)) |> filter(term=="dirbunk")
+})
+kable(bind_rows(s1_perc_fits, .id="outcome") |> select(outcome, estimate, std.error, statistic, p.value),
+      digits = 3, caption = "Study 1 perception judgments — HC3 bunk−debunk contrasts.")
+```
+
+```{r s1-perc-vals, include=FALSE}
+gp <- function(o) s1_perc |> filter(outcome == o)
+ni <- gp("Provided new information"); ar <- gp("Argument strength")
+co <- gp("Collaborativeness"); ub <- gp("Impartiality (unbiased)")
+```
+
+Relative to debunking, the bunking AI was rated as providing more new information
+(M~Bunk~ = `r mn2(ni$mBunk)`, M~Debunk~ = `r mn2(ni$mDebunk)`, *d* = `r mn2(ni$d)`, `r P(ni$p)`),
+as making stronger arguments (M~Bunk~ = `r mn2(ar$mBunk)`, M~Debunk~ = `r mn2(ar$mDebunk)`,
+*d* = `r mn2(ar$d)`, `r P(ar$p)`), and as more collaborative (M~Bunk~ = `r mn2(co$mBunk)`,
+M~Debunk~ = `r mn2(co$mDebunk)`, *d* = `r mn2(co$d)`, `r P(co$p)`), while the two were rated
+similarly unbiased (M~Bunk~ = `r mn2(ub$mBunk)`, M~Debunk~ = `r mn2(ub$mDebunk)`,
+*d* = `r mn2(ub$d)`, `r P(ub$p)`).
+
+## Spillover to generic conspiracy belief (GCBS) {-}
+
+```{r s1-gcbs}
+s1g <- s1 |> filter(!is.na(GCBS_change))
+gcbs_cell <- s1g |> group_by(condition_factor) |>
+  summarise(n=n(), m=mean(GCBS_change), s=sd(GCBS_change), dz=m/s,
+            t=t.test(GCBS_change)$statistic, p=t.test(GCBS_change)$p.value, .groups="drop")
+gcbs_cell
+```
+
+GCBS scores increased after bunking (Δ = `r mn2(gcbs_cell$m[gcbs_cell$condition_factor=="Bunking"])`,
+*dz* = `r mn2(gcbs_cell$dz[gcbs_cell$condition_factor=="Bunking"])`) and decreased after debunking
+(Δ = `r mn2(gcbs_cell$m[gcbs_cell$condition_factor=="Debunking"])`,
+*dz* = `r mn2(gcbs_cell$dz[gcbs_cell$condition_factor=="Debunking"])`), indicating spillover from the
+focal conspiracy to a more generic conspiratorial worldview (Table S24).
+
+```{r child = "code/sections/results_s2.Rmd"}
+```
+
+```{r child = "code/sections/results_s3.Rmd"}
+```
+
+```{r child = "code/sections/results_s4.Rmd"}
+```

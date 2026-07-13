@@ -1,0 +1,701 @@
+entries:
+- id: abs_total_n
+  section: Abstract
+  para: 11
+  anchor: participants (N = {{n_total}} Americans)
+  values:
+    n_total: abs.total_n
+- id: fig1_case_baseline
+  section: Figure 1 caption
+  para: 23
+  anchor: At baseline the participant rated their confidence at {{pre}}%.
+  values:
+    pre: fig1.case.pre_conf
+- id: fig1_case_post
+  section: Figure 1 caption
+  para: 23
+  anchor: Immediately afterward their confidence was {{post}}%.
+  values:
+    post: fig1.case.post_conf
+- id: fig1_case_final
+  section: Figure 1 caption
+  para: 23
+  anchor: Their final rating was {{final}}%.
+  values:
+    final: fig1.case.debrief_conf
+- id: s1_sample_n
+  section: Results / Study 1
+  para: 27
+  anchor: In Study 1, N = {{n}} (after pre-registered exclusions
+  values:
+    n: s1.sample.n
+- id: s1_ape_rates
+  section: Results / Study 1
+  para: 27
+  anchor: APE = {{bunk_rate}}% attempt rate in the “bunking” condition and {{debunk_rate}}% in “debunking”
+  values:
+    bunk_rate: s1.ape.bunk_attempt_pct
+    debunk_rate: s1.ape.debunk_attempt_pct
+- id: s1_debunk_headline
+  section: Results / Study 1
+  para: 28
+  anchor: (0-100 scale; MPre = {{pre_m}}) decreased by {{m}} points on average after the conversation (95% CI [{{lo}}, {{hi}}], p {{p}}, a {{pct}}% change, or g = {{g}} units of pretest SD pooled across conditions with the Hedges correction)
+  values:
+    pre_m: s1.debunk_belief.pre_mean
+    m: s1.debunk_belief.mean
+    lo: s1.debunk_belief.ci_lo
+    hi: s1.debunk_belief.ci_hi
+    p: s1.debunk_belief.p
+    pct: s1.debunk_belief.pct_change
+    g: s1.debunk_belief.g
+- id: s1_bunk_headline
+  section: Results / Study 1
+  para: 28
+  anchor: Focal conspiracy belief increased by {{m}} points (95% CI [{{lo}}, {{hi}}], g = {{g}}, {{pct}}% change, p {{p}}) in the “bunking” condition
+  values:
+    m: s1.bunk_belief.mean
+    lo: s1.bunk_belief.ci_lo
+    hi: s1.bunk_belief.ci_hi
+    g: s1.bunk_belief.g
+    pct: s1.bunk_belief.pct_change
+    p: s1.bunk_belief.p
+- id: s1_bunk_debunk_contrast
+  section: Results / Study 1
+  para: 28
+  anchor: did not differ significantly (b = {{b}}, 95% CI [{{lo}}, {{hi}}]; t = {{t}}, p {{p}}, Figure 2A; Tables S8–S9)
+  values:
+    b: s1.belief_contrast.b
+    lo: s1.belief_contrast.ci_lo
+    hi: s1.belief_contrast.ci_hi
+    t: s1.belief_contrast.t
+    p: s1.belief_contrast.p
+- id: fig2_sample_n
+  section: Figure 2 caption
+  para: 30
+  anchor: All panels use the Study 1 analytic sample (N = {{n}}).
+  values:
+    n: s1.sample.n
+- id: fig2_exceedance40
+  section: Figure 2 caption
+  para: 30
+  anchor: for example, {{deb_pct}}% of debunking participants and {{bunk_pct}}% of bunking participants moved at least 40 points
+  values:
+    deb_pct: s1.exceedance40.debunk_pct
+    bunk_pct: s1.exceedance40.bunk_pct
+- id: s1_ks_distribution
+  section: Results / Study 1
+  para: 33
+  anchor: (Kolmogorov-Smirnov D = {{D}}, p {{p}})
+  values:
+    D: s1.ks.D
+    p: s1.ks.p
+- id: s1_ge40_shift_chisq
+  section: Results / Study 1
+  para: 33
+  anchor: debunking induced a 40-point or larger belief shift in {{deb_pct}}% of participants, compared to {{bunk_pct}}% of participants for bunking, 𝛘2 = {{chisq}}, p {{p}}
+  values:
+    deb_pct: s1.exceedance40.debunk_pct
+    bunk_pct: s1.exceedance40.bunk_pct
+    chisq: s1.ge40_chisq.stat
+    p: s1.ge40_chisq.p
+- id: s1_trust_change
+  section: Results / Study 1 (trust)
+  para: 34
+  anchor: 1-7 scale ; ΔBunk = {{d_bunk}}, g = {{g_bunk}}; ΔDebunk = {{d_debunk}}, g = {{g_debunk}}; between-condition g = {{g_diff}}, p {{p}}
+  values:
+    d_bunk: s1.trust.bunk_delta
+    g_bunk: s1.trust.bunk_g
+    d_debunk: s1.trust.debunk_delta
+    g_debunk: s1.trust.debunk_g
+    g_diff: s1.trust.diff_g
+    p: s1.trust.diff_p
+- id: s1_perception_new_info
+  section: Results / Study 1 (perceptions)
+  para: 34
+  anchor: on a 1-10 scale, MBunk = {{m_bunk}}, MDebunk = {{m_debunk}}, d = {{d}}, p {{p}}
+  values:
+    m_bunk: s1.perc_newinfo.m_bunk
+    m_debunk: s1.perc_newinfo.m_debunk
+    d: s1.perc_newinfo.d
+    p: s1.perc_newinfo.p
+- id: s1_perception_arg_strength
+  section: Results / Study 1 (perceptions)
+  para: 34
+  anchor: on a scale from 1 [extremely weak] to 5 [extremely strong], MBunk = {{m_bunk}}, MDebunk = {{m_debunk}}, d = {{d}}, p {{p}}
+  values:
+    m_bunk: s1.perc_arg.m_bunk
+    m_debunk: s1.perc_arg.m_debunk
+    d: s1.perc_arg.d
+    p: s1.perc_arg.p
+- id: s1_perception_collaborative
+  section: Results / Study 1 (perceptions)
+  para: 34
+  anchor: on a -2 to 2 scale anchored by “adversarial” and “collaborative”, MBunk = {{m_bunk}}, MDebunk = {{m_debunk}}, d = {{d}}, p {{p}}
+  values:
+    m_bunk: s1.perc_collab.m_bunk
+    m_debunk: s1.perc_collab.m_debunk
+    d: s1.perc_collab.d
+    p: s1.perc_collab.p
+- id: s1_perception_unbiased
+  section: Results / Study 1 (perceptions)
+  para: 34
+  anchor: anchored by “unbiased” and “biased”, MBunk = {{m_bunk}}, MDebunk = {{m_debunk}}, d = {{d}}, p {{p}}
+  values:
+    m_bunk: s1.perc_unbiased.m_bunk
+    m_debunk: s1.perc_unbiased.m_debunk
+    d: s1.perc_unbiased.d
+    p: s1.perc_unbiased.p
+- id: s1_debrief_shift
+  section: Results / Study 1 (debrief)
+  para: 38
+  anchor: the debriefing reduced belief in the focal conspiracy by {{m}} points relative to belief immediately after the bunking (t = {{t}}, p {{p}}
+  values:
+    m: s1.debrief.shift_mean
+    t: s1.debrief.shift_t
+    p: s1.debrief.shift_p
+- id: s1_debrief_net
+  section: Results / Study 1 (debrief)
+  para: 38
+  anchor: (Δpre - debrief = {{m}}, t = {{t}}, p {{p}})
+  values:
+    m: s1.debrief.net_mean
+    t: s1.debrief.net_t
+    p: s1.debrief.net_p
+- id: s2_sample_n
+  section: Results / Study 2
+  anchor: GPT-4o model (N = {{n}} after exclusions)
+  values:
+    n: s2.n
+- id: s2_ape_rates
+  section: Results / Study 2
+  anchor: (APE attempt rate = {{bunk}}% bunking, {{debunk}}% debunking)
+  values:
+    bunk: s2.ape.bunk
+    debunk: s2.ape.debunk
+- id: s2_bunk_madj
+  section: Results / Study 2
+  anchor: a large increase in conspiracy belief in the bunking condition (Madj = {{m}}, 95% CI [{{lo}}, {{hi}}], g = {{g}}, p {{p}})
+  values:
+    m: s2.bunk.madj
+    lo: s2.bunk.ci_lo
+    hi: s2.bunk.ci_hi
+    g: s2.bunk.g
+    p: s2.bunk.p
+- id: s2_bunk_vs_debunk_contrast
+  section: Results / Study 2
+  anchor: that was not significantly different in magnitude (b = {{b}}, 95% CI [{{lo}}, {{hi}}]; p {{p}}) from the large decrease
+  values:
+    b: s2.contrast.b
+    lo: s2.contrast.ci_lo
+    hi: s2.contrast.ci_hi
+    p: s2.contrast.p
+- id: s2_debunk_madj
+  section: Results / Study 2
+  anchor: the debunking condition (Madj = {{m}}, 95% CI [{{lo}}, {{hi}}], g = {{g}}, p {{p}})
+  values:
+    m: s2.debunk.madj
+    lo: s2.debunk.ci_lo
+    hi: s2.debunk.ci_hi
+    g: s2.debunk.g
+    p: s2.debunk.p
+- id: s2_trust_gap
+  section: Results / Study 2
+  anchor: trust in generative AI was (marginally) higher after the bunking condition than the debunking condition (between-condition g = {{g}}, p {{p}})
+  values:
+    g: s2.trust.g
+    p: s2.trust.p
+- id: s2_perception_ds
+  section: Results / Study 2
+  anchor: rated higher on providing new information (d = {{d_ni}}, p {{p_ni}}), argument quality (d = {{d_aq}}, p {{p_aq}}), and (non)adversarialness (d = {{d_col}}, p {{p_col}}), but not bias (d = {{d_ub}}, p {{p_ub}})
+  values:
+    d_ni: s2.perc.newinfo.d
+    p_ni: s2.perc.newinfo.p
+    d_aq: s2.perc.arg.d
+    p_aq: s2.perc.arg.p
+    d_col: s2.perc.collab.d
+    p_col: s2.perc.collab.p
+    d_ub: s2.perc.unbiased.d
+    p_ub: s2.perc.unbiased.p
+- id: s1_vs_s2_crossstudy
+  section: Results / Study 2
+  anchor: for both bunking (b = {{b_b}}, 95% CI [{{lo_b}}, {{hi_b}}], p {{p_b}}) or debunking (b = {{b_d}}, 95% CI [{{lo_d}}, {{hi_d}}], p {{p_d}})
+  values:
+    b_b: s12.cross.bunk.b
+    lo_b: s12.cross.bunk.ci_lo
+    hi_b: s12.cross.bunk.ci_hi
+    p_b: s12.cross.bunk.p
+    b_d: s12.cross.debunk.b
+    lo_d: s12.cross.debunk.ci_lo
+    hi_d: s12.cross.debunk.ci_hi
+    p_d: s12.cross.debunk.p
+- id: s2_debrief
+  section: Results / Study 2
+  anchor: reduced conspiracy beliefs from their post-bunking height by {{drop}} points (p {{p_drop}}) – significantly below participants’ baseline belief (Δpre - debrief = {{net}}, p {{p_net}})
+  values:
+    drop: s2.debrief.drop
+    p_drop: s2.debrief.drop_p
+    net: s2.debrief.net
+    p_net: s2.debrief.net_p
+- id: s3_sample_n
+  section: Results / Study 3
+  anchor: in Study 3 (N = {{n}}), we test the effect of a very basic safeguard
+  values:
+    n: s3.n
+- id: claims_k_total
+  section: Results / claim fact-checking
+  anchor: (k = {{k}} claims across the three studies)
+  values:
+    k: claims.k
+- id: claims_per_conv
+  section: Results / claim fact-checking
+  anchor: claim dense (M = {{m}} claims per conversation)
+  values:
+    m: claims.per_conv
+- id: claims_substantive_per_conv
+  section: Results / claim fact-checking
+  anchor: numbered M = {{m1}}/{{m2}}/{{m3}} per conversation (for Studies 1-3, respectively)
+  values:
+    m1: claims.subst.s1
+    m2: claims.subst.s2
+    m3: claims.subst.s3
+- id: veracity_means_s123
+  section: Results / claim fact-checking
+  anchor: averaged {{s1b}} veracity when bunking and {{s1d}} when debunking; in Study 2 the standard model averaged {{s2b}} (bunk) and {{s2d}} (debunk). Under the truth constraint these rose to {{s3b}} (bunk) and {{s3d}} (debunk)
+  values:
+    s1b: verac.mean.s1.bunk
+    s1d: verac.mean.s1.debunk
+    s2b: verac.mean.s2.bunk
+    s2d: verac.mean.s2.debunk
+    s3b: verac.mean.s3.bunk
+    s3d: verac.mean.s3.debunk
+- id: veracity_gap_ds
+  section: Results / claim fact-checking
+  anchor: veracity gap shrunk considerably (debunk − bunk d = {{d3}}, p {{p3}}, versus d = {{d1}} and d = {{d2}} in the two unconstrained studies)
+  values:
+    d3: verac.gap.d.s3
+    p3: verac.gap.p.s3
+    d1: verac.gap.d.s1
+    d2: verac.gap.d.s2
+- id: false_shares_s1_s3
+  section: Results / claim fact-checking
+  anchor: in Study 1, {{s1b}}% of bunking claims and {{s1d}}% of debunking claims were explicitly false, with this dropping to {{s3b}}% (bunk) and {{s3d}}% (debunk) in the truth-constrained study
+  values:
+    s1b: verac.p40.s1.bunk
+    s1d: verac.p40.s1.debunk
+    s3b: verac.p40.s3.bunk
+    s3d: verac.p40.s3.debunk
+- id: false_shares_s2
+  section: Results / claim fact-checking
+  anchor: (The corresponding shares for standard GPT-4o in Study 2 were {{s2b}}% and {{s2d}}%.)
+  values:
+    s2b: verac.p40.s2.bunk
+    s2d: verac.p40.s2.debunk
+- id: focal_conspiracy_veracity
+  section: Results / claim fact-checking
+  anchor: classified {{pf}}% as false (<40) and only {{pt}}% as true (≥60), with similar shares in every study ({{lo}}–{{hi}}% false)
+  values:
+    pf: focal.false.pct
+    pt: focal.true.pct
+    lo: focal.false.range_lo
+    hi: focal.false.range_hi
+- id: s3_debunk_effect
+  section: Results / Study 3
+  anchor: (Madj = {{m}}, 95% CI [{{lo}}, {{hi}}], {{pct}}% change, g = {{g}}, p {{p}}; comparisons with debunking in previous studies yields ps {{ps}})
+  values:
+    m: s3.debunk.madj
+    lo: s3.debunk.ci_lo
+    hi: s3.debunk.ci_hi
+    pct: s3.debunk.pct_change
+    g: s3.debunk.g
+    p: s3.debunk.p
+    ps: s3.debunk.cross_ps
+- id: s3_bunk_effect
+  section: Results / Study 3
+  anchor: (M = {{m}}, 95% CI [{{lo}}, {{hi}}], {{pct}}% change, g = {{g}}, p {{p}}; comparisons with bunking in previous studies yields ps {{ps}})
+  values:
+    m: s3.bunk.m
+    lo: s3.bunk.ci_lo
+    hi: s3.bunk.ci_hi
+    pct: s3.bunk.pct_change
+    g: s3.bunk.g
+    p: s3.bunk.p
+    ps: s3.bunk.cross_ps
+- id: s3_bunk_vs_debunk_t
+  section: Results / Study 3
+  anchor: much less effective than debunking (t = {{t}}, p {{p}})
+  values:
+    t: s3.contrast.t
+    p: s3.contrast.p
+- id: s3_compliance_rates
+  section: Results / Study 3
+  anchor: drop in compliance to {{bunk_rate}}% (Table S19). That is, {{noncomp}}% of the time, the bunking condition model refused to actually advocate for the conspiracy (in contrast, the debunking condition complied {{debunk_rate}}% of the time)
+  values:
+    bunk_rate: s3.ape.bunk
+    noncomp: s3.ape.bunk_noncomp
+    debunk_rate: s3.ape.debunk
+- id: s3_nonattempt_review_n
+  section: Results / Study 3
+  anchor: A qualitative review of {{n}} non-attempt conversations from the bunking condition
+  values:
+    n: s3.nonattempt.n
+- id: s3_noncompliant_backfire
+  section: Results / Study 3
+  anchor: substantially reducing, rather than increasing, belief in the conspiracy (M = {{m}}, 95% CI [{{lo}}, {{hi}}], p {{p}})
+  values:
+    m: s3.backfire.m
+    lo: s3.backfire.ci_lo
+    hi: s3.backfire.ci_hi
+    p: s3.backfire.p
+- id: s3_compliant_retention
+  section: Results / Study 3
+  anchor: retained only {{r_s2}}% of the standard-model bunking effect and {{r_s1}}% of the jailbroken bunking effect (ps {{ps}})
+  values:
+    r_s2: s3.retention.vs_s2
+    r_s1: s3.retention.vs_s1
+    ps: s3.retention.ps
+- id: s3_debunk_equivalence
+  section: Results / Study 3
+  anchor: Debunking effects, conversely, were statistically equivalent across all studies (ps {{ps}})
+  values:
+    ps: s3.debunk_equiv.ps
+- id: s3_counterfactual_contrast
+  section: Results / Study 3
+  anchor: the bunking effect was significantly smaller than the debunking effect (b = {{b}}, 95% CI [{{lo}}, {{hi}}], p {{p}})
+  values:
+    b: s3.cf.b
+    lo: s3.cf.ci_lo
+    hi: s3.cf.ci_hi
+    p: s3.cf.p
+- id: s3_top_veracity_quartile
+  section: Results / Study 3 (paltering)
+  anchor: (ns = {{n1}}/{{n2}}/{{n3}}, mean changes = {{m1}}/{{m2}}/{{m3}} points; Fig. S12)
+  values:
+    n1: topq.n.s1
+    n2: topq.n.s2
+    n3: topq.n.s3
+    m1: topq.m.s1
+    m2: topq.m.s2
+    m3: topq.m.s3
+- id: fig3_sample_ns
+  section: Fig 3 caption
+  anchor: jailbroken GPT-4o (N = {{n1}}), standard GPT-4o (N = {{n2}}) and truth-constrained GPT-4o (N = {{n3}}; compliant subset N = {{n4}} - the dual-compliance matched subset
+  values:
+    n1: s1.n
+    n2: s2.n
+    n3: s3.n
+    n4: s3.matched.n
+- id: fig3_low_veracity_shares
+  section: Fig 3 caption
+  anchor: The low-veracity shares for bunking/debunking were {{s1b}}%/{{s1d}}% for jailbroken GPT-4o, {{s2b}}%/{{s2d}}% for standard GPT-4o and {{s3b}}%/{{s3d}}% for truth-constrained GPT-4o
+  values:
+    s1b: verac.p40.s1.bunk
+    s1d: verac.p40.s1.debunk
+    s2b: verac.p40.s2.bunk
+    s2d: verac.p40.s2.debunk
+    s3b: verac.p40.s3.bunk
+    s3d: verac.p40.s3.debunk
+- id: s4_sample_n
+  section: Results / Study 4
+  para: 62
+  anchor: Study 4 (N = {{n4}} after pre-registered exclusions
+  values:
+    n4: s4.n_strict
+- id: s4_belief_cells_p_family
+  section: Results / Study 4
+  para: 63
+  anchor: all models (all pre-to-post changes p {{p_all}})
+  values:
+    p_all: s4.cells.p_max_others
+- id: s4_claude_belief_cells
+  section: Results / Study 4
+  para: 63
+  anchor: Claude {{cb}} [95% CI {{cb_lo}}, {{cb_hi}}] vs. {{cd}} [{{cd_lo}}, {{cd_hi}}]
+  values:
+    cb: s4.claude.bunk_mean
+    cb_lo: s4.claude.bunk_lo
+    cb_hi: s4.claude.bunk_hi
+    cd: s4.claude.debunk_mean
+    cd_lo: s4.claude.debunk_lo
+    cd_hi: s4.claude.debunk_hi
+- id: s4_gemini_belief_cells
+  section: Results / Study 4
+  para: 63
+  anchor: Gemini {{gb}} [{{gb_lo}}, {{gb_hi}}] vs. {{gd}} [{{gd_lo}}, {{gd_hi}}]
+  values:
+    gb: s4.gemini.bunk_mean
+    gb_lo: s4.gemini.bunk_lo
+    gb_hi: s4.gemini.bunk_hi
+    gd: s4.gemini.debunk_mean
+    gd_lo: s4.gemini.debunk_lo
+    gd_hi: s4.gemini.debunk_hi
+- id: s4_grok_belief_cells
+  section: Results / Study 4
+  para: 63
+  anchor: Grok {{kb}} [{{kb_lo}}, {{kb_hi}}] vs. {{kd}} [{{kd_lo}}, {{kd_hi}}]
+  values:
+    kb: s4.grok.bunk_mean
+    kb_lo: s4.grok.bunk_lo
+    kb_hi: s4.grok.bunk_hi
+    kd: s4.grok.debunk_mean
+    kd_lo: s4.grok.debunk_lo
+    kd_hi: s4.grok.debunk_hi
+- id: s4_gpt52_bunk_backfire
+  section: Results / Study 4
+  para: 63
+  anchor: moving {{m}} points [95% CI {{lo}}, {{hi}}]
+  values:
+    m: s4.gpt52.bunk_mean_txt
+    lo: s4.gpt52.bunk_lo_txt
+    hi: s4.gpt52.bunk_hi_txt
+- id: s4_gpt52_belief_contrast_p
+  section: Results / Study 4
+  para: 63
+  anchor: debunking was vastly more successful than bunking at moving beliefs in the intended direction (p {{p}})
+  values:
+    p: s4.gpt52.belief_contrast_p
+- id: s4_bunk_compliance_rates
+  section: Results / Study 4
+  para: 65
+  anchor: high for Gemini 3 Pro ({{gem}}%), Grok 4 ({{grok}}%), and Claude Opus 4.6 ({{cl}}%) but extremely low for GPT-5.2 ({{gpt}}%)
+  values:
+    gem: s4.compliance.gemini_bunk
+    grok: s4.compliance.grok_bunk
+    cl: s4.compliance.claude_bunk
+    gpt: s4.compliance.gpt52_bunk
+- id: s4_gpt52_noncompliance_split
+  section: Results / Study 4
+  para: 65
+  anchor: argued against the conspiracy in the majority ({{ctr}}%) of cases (and simply refused to comply {{ref}}% of the time)
+  values:
+    ctr: s4.gpt52.counterargue_pct
+    ref: s4.gpt52.refuse_pct
+- id: s4_gpt52_false_claims
+  section: Results / Study 4
+  para: 65
+  anchor: only {{f}}% of claims being false in bunking
+  values:
+    f: s4.false_claims.gpt52
+- id: s4_other_models_false_claims
+  section: Results / Study 4
+  para: 65
+  anchor: 'bunking claims: Claude Opus 4.6 = {{fc}}% false, Grok 4 = {{fk}}% false, Gemini 3 Pro = {{fg}}% false'
+  values:
+    fc: s4.false_claims.claude
+    fk: s4.false_claims.grok
+    fg: s4.false_claims.gemini
+- id: s4_debunk_sharing_pooled
+  section: Results / Study 4
+  para: 69
+  anchor: sharing pro-conspiracy posts (net change {{dp}} pp) and substantially increased their reported likelihood of sharing anti-conspiracy posts (net change {{da}} pp) (pre-to-post change p {{p}} for all)
+  values:
+    dp: s4.sharing.debunk_pro_pp
+    da: s4.sharing.debunk_anti_pp
+    p: s4.sharing.debunk_p_family
+- id: s4_bunk_sharing_per_model
+  section: Results / Study 4
+  para: 69
+  anchor: Claude Opus 4.6 (net change {{c}}pp, p {{pc}}) and Grok 4 (net change {{k}}pp, p {{pk}}), no change after talking to Gemini 3 Pro (net change {{g}}, p {{pg}}), and a large decrease after talked to GPT 5.2 (net change {{q}}pp, p {{pq}})
+  values:
+    c: s4.sharing.bunk_claude_pp
+    pc: s4.sharing.bunk_claude_p
+    k: s4.sharing.bunk_grok_pp
+    pk: s4.sharing.bunk_grok_p
+    g: s4.sharing.bunk_gemini_pp
+    pg: s4.sharing.bunk_gemini_p
+    q: s4.sharing.bunk_gpt52_pp
+    pq: s4.sharing.bunk_gpt52_p
+- id: s4_bunk_anti_sharing
+  section: Results / Study 4
+  para: 69
+  anchor: anti-conspiracy posts (p  {{pgg}}) for Gemini and Grok; a small but significant decrease for Claude ({{ac}} pp, p {{pac}}), and a significant increase for GPT 5.2, p {{pag}})
+  values:
+    pgg: s4.sharing.anti_bunk_gemgrok_p
+    ac: s4.sharing.anti_bunk_claude_pp
+    pac: s4.sharing.anti_bunk_claude_p
+    pag: s4.sharing.anti_bunk_gpt52_p
+- id: s4_nonmover_asymmetry
+  section: Results / Study 4
+  para: 69
+  anchor: for whom debunking − bunking = {{e}}, 95% CI [{{lo}}, {{hi}}], p {{p}}; see Fig. S19
+  values:
+    e: s4.nonmover.contrast
+    lo: s4.nonmover.lo
+    hi: s4.nonmover.hi
+    p: s4.nonmover.p
+- id: cf_heterogeneity_quartiles
+  section: Results / Study 4 (pooled causal forest)
+  para: 71
+  anchor: test for systematic heterogeneity, p {{p}}; the estimated bunk–debunk swing ranged from {{q1}} points in the least-movable quarter of participants to {{q4}} in the most-movable
+  values:
+    p: cf.heterogeneity_p
+    q1: cf.q1_swing
+    q4: cf.q4_swing
+- id: cf_ai_attitudes
+  section: Results / Study 4 (pooled causal forest)
+  para: 71
+  anchor: moved more readily in either direction ({{tr}} points per within-study SD, p {{ptr}}), whereas frequent AI users were more resistant ({{use}}, p {{puse}})
+  values:
+    tr: cf.ai_trust_slope
+    ptr: cf.ai_trust_p
+    use: cf.ai_use_slope
+    puse: cf.ai_use_p
+- id: cf_gender
+  section: Results / Study 4 (pooled causal forest)
+  para: 71
+  anchor: (debunk arm {{f}}, p {{pf}}; bunk arm p {{pb}})
+  values:
+    f: cf.female_debunk_slope
+    pf: cf.female_debunk_p
+    pb: cf.female_bunk_p
+- id: cf_topic_extremes
+  section: Results / Study 4 (pooled causal forest)
+  para: 71
+  anchor: largest for the 9/11 “inside job,” {{t1}}; smallest for the Area 51 cover-up, {{t2}})
+  values:
+    t1: cf.topic_911_swing
+    t2: cf.topic_area51_swing
+- id: fig4_sample_n
+  section: Fig. 4 caption
+  para: 74
+  anchor: regardless of model compliance) (N = {{n}}), with participants randomized
+  values:
+    n: s4.n_strict
+- id: fig4_gpt52_backfire
+  section: Fig. 4 caption
+  para: 74
+  anchor: (mean = {{m}} points, 95% CI {{lo}} to {{hi}})
+  values:
+    m: fig4.gpt52_bunk_mean
+    lo: fig4.gpt52_bunk_lo
+    hi: fig4.gpt52_bunk_hi
+- id: meth_total_and_ns
+  section: Methods / Study designs [84]
+  anchor: Across the four studies we analyzed data from {{total}} US adults (Study 1, n = {{n1}}; Study 2, n = {{n2}}; Study 3, n = {{n3}}; Study 4, n = {{n4}})
+  values:
+    total: meth.n_total
+    n1: meth.n_s1
+    n2: meth.n_s2
+    n3: meth.n_s3
+    n4: meth.n_s4
+- id: meth_demo_white
+  section: Methods / Participants, recruitment and sample sizes [89]
+  anchor: predominantly White ({{w1}}%, {{w2}}%, {{w3}}% in Studies 1–3; {{w4lo}}–{{w4hi}}% across the four Study-4 models)
+  values:
+    w1: meth.pct_white_s1
+    w2: meth.pct_white_s2
+    w3: meth.pct_white_s3
+    w4lo: meth.pct_white_s4_lo
+    w4hi: meth.pct_white_s4_hi
+- id: meth_demo_female
+  section: Methods / Participants, recruitment and sample sizes [89]
+  anchor: skewed modestly female ({{f1}}%, {{f2}}%, {{f3}}% in Studies 1–3; {{f4lo}}–{{f4hi}}% in Study 4)
+  values:
+    f1: meth.pct_female_s1
+    f2: meth.pct_female_s2
+    f3: meth.pct_female_s3
+    f4lo: meth.pct_female_s4_lo
+    f4hi: meth.pct_female_s4_hi
+- id: meth_demo_age
+  section: Methods / Participants, recruitment and sample sizes [89]
+  anchor: middle-aged (mean {{a1}} and {{a2}} years in Studies 1 and 2; {{a3}} years in Study 3; {{a4lo}}–{{a4hi}} years in Study 4)
+  values:
+    a1: meth.age_s1
+    a2: meth.age_s2
+    a3: meth.age_s3
+    a4lo: meth.age_s4_lo
+    a4hi: meth.age_s4_hi
+- id: meth_demo_ideology
+  section: Methods / Participants, recruitment and sample sizes [89]
+  anchor: mean social conservatism {{soclo}}–{{sochi}} and economic conservatism {{ecolo}}–{{ecohi}} on five-point items
+  values:
+    soclo: meth.soccon_lo
+    sochi: meth.soccon_hi
+    ecolo: meth.econcon_lo
+    ecohi: meth.econcon_hi
+- id: meth_analytic_ns
+  section: Methods / Eligibility screening, exclusions and attrition [91]
+  anchor: the analytic samples comprised {{n1}} (Study 1), {{n2}} (Study 2), {{n3}} (Study 3) and {{n4}} (Study 4) participants
+  values:
+    n1: meth.n_s1
+    n2: meth.n_s2
+    n3: meth.n_s3
+    n4: meth.n_s4
+- id: meth_conv_words
+  section: Methods / Procedure [95]
+  anchor: rose from about {{w_s1}} words per conversation with the jailbroken model (Study 1) to about {{w_s23}} words with standard and truth-constrained GPT-4o (Studies 2 and 3) and about {{w_s4}} words across the frontier models (Study 4), whereas participants’ own contributions held steady at roughly {{w_user}} words
+  values:
+    w_s1: meth.asst_words_s1
+    w_s23: meth.asst_words_s23
+    w_s4: meth.asst_words_s4
+    w_user: meth.user_words
+- id: meth_conv_duration
+  section: Methods / Procedure [95]
+  anchor: The median AI conversation lasted {{d1}} / {{d2}} / {{d3}} / {{d4}} in Studies 1-4
+  values:
+    d1: meth.median_dur_s1
+    d2: meth.median_dur_s2
+    d3: meth.median_dur_s3
+    d4: meth.median_dur_s4
+- id: meth_ape_validation
+  section: Methods / Automated measurement — Compliance [103]
+  anchor: about as well as humans agree with one another ({{agree}}% agreement; Cohen’s κ = {{kappa}})
+  values:
+    agree: meth.ape_agreement
+    kappa: meth.ape_kappa
+- id: meth_aligned_claims_per_conv
+  section: Methods / Automated measurement — Claim veracity [104]
+  anchor: (typically {{lo}}–{{hi}} such claims per conversation)
+  values:
+    lo: meth.aligned_claims_lo
+    hi: meth.aligned_claims_hi
+- id: meth_claim_counts
+  section: Methods / Automated measurement — Claim veracity [104]
+  anchor: Across Studies 1–3 we fact-checked {{k13}} claims; Study 4 yielded {{k4ext}} extracted claims, of which {{k4fc}} were fact-checked
+  values:
+    k13: meth.k_claims_s13
+    k4ext: meth.k_claims_s4_extracted
+    k4fc: meth.k_claims_s4_factchecked
+- id: meth_stance_reliability
+  section: Methods / Automated measurement — Post stance [105]
+  anchor: reliability was high (Krippendorff’s α = {{alpha}}; ICC(2,k) = {{icc}}; mean pairwise rater r = {{r}})
+  values:
+    alpha: meth.stance_alpha
+    icc: meth.stance_icc2k
+    r: meth.stance_pairwise_r
+- id: meth_post_composition
+  section: Methods / Automated measurement — Post stance [105]
+  anchor: about {{offtopic}}% off-topic and {{declining}}% declining to post
+  values:
+    offtopic: meth.post_pct_offtopic
+    declining: meth.post_pct_declining
+- id: meth_gold_n
+  section: Methods / Automated measurement — Post stance [105]
+  anchor: hand-coded a stratified gold sample of {{n}} posts
+  values:
+    n: meth.gold_n
+- id: meth_gold_agreement
+  section: Methods / Automated measurement — Post stance [105]
+  anchor: (stance-score Pearson r = {{r}}, ICC(2,1) = {{icc}}; mean absolute error = {{mae}} points on the 0–100 scale), with {{diragree}}% agreement on the pro- versus anti-conspiracy direction (Cohen’s κ = {{dirkappa}}) and {{applagree}}% agreement on whether a post was scoreable at all (κ = {{applkappa}})
+  values:
+    r: meth.gold_pearson_r
+    icc: meth.gold_icc21
+    mae: meth.gold_mae
+    diragree: meth.gold_dir_agree
+    dirkappa: meth.gold_dir_kappa
+    applagree: meth.gold_appl_agree
+    applkappa: meth.gold_appl_kappa
+- id: meth_topics_n
+  section: Methods / Automated measurement — Topic taxonomy [106]
+  anchor: This yielded {{k}} interpretable topics
+  values:
+    k: meth.n_topics
+- id: meth_topics_mixed
+  section: Methods / Automated measurement — Topic taxonomy [106]
+  anchor: with the remaining roughly {{pct}}% of descriptions left as an idiosyncratic “mixed” set
+  values:
+    pct: meth.pct_mixed
+- id: meth_cf_topics
+  section: Methods / Statistical analysis — causal forest [112]
+  anchor: the participant’s conspiracy topic (canonical {{k}}-topic assignment
+  values:
+    k: meth.n_topics

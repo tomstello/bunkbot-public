@@ -1,0 +1,67 @@
+cff-version: 1.2.0
+message: "If you use this software or data, please cite the article below."
+title: "Bunkbot: reproduction package for \"AI can effectively promote conspiracies unless it is truth constrained\""
+abstract: >-
+  Self-contained reproduction repository for four experiments, three pre-registered
+  (Studies 1-4, N = 3,996), testing whether large language models can both instil
+  ("bunk") and dispel ("debunk") conspiracy beliefs. Every reported number, table,
+  and figure is reproduced API-free from de-identified data and cached model
+  annotations through one shared recompute (ALL_NUMBERS), rendered via
+  results_methods.Rmd and the Supplementary Information.
+type: software
+authors:
+  - family-names: Costello
+    given-names: Thomas H.
+    email: t.h.costello1@gmail.com
+  - family-names: Pelrine
+    given-names: Kellin
+  - family-names: Kowal
+    given-names: Matthew
+  - family-names: Timm
+    given-names: Jasper
+  - family-names: Arechar
+    given-names: Antonio A.
+  - family-names: Godbout
+    given-names: Jean-François
+  - family-names: Gleave
+    given-names: Adam
+  - family-names: Pennycook
+    given-names: Gordon
+  - family-names: Rand
+    given-names: David G.
+version: "1.1.0"
+date-released: "2026-07-08"
+repository-code: "https://github.com/tomstello/bunkbot-public"
+license:
+  - MIT
+  - CC-BY-4.0
+keywords:
+  - large language models
+  - persuasion
+  - conspiracy beliefs
+  - misinformation
+  - reproducibility
+preferred-citation:
+  type: article
+  title: "AI can effectively promote conspiracies unless it is truth constrained"
+  authors:
+    - family-names: Costello
+      given-names: Thomas H.
+    - family-names: Pelrine
+      given-names: Kellin
+    - family-names: Kowal
+      given-names: Matthew
+    - family-names: Timm
+      given-names: Jasper
+    - family-names: Arechar
+      given-names: Antonio A.
+    - family-names: Godbout
+      given-names: Jean-François
+    - family-names: Gleave
+      given-names: Adam
+    - family-names: Pennycook
+      given-names: Gordon
+    - family-names: Rand
+      given-names: David G.
+  year: 2026
+  # journal + DOI: under review; fill in on acceptance.

@@ -1,0 +1,135 @@
+# Study 2 — Standard (non-jailbroken) GPT-4o {#s2}
+
+```{r s2-data}
+s2 <- s13 |> filter(study_factor == "Standard") |> droplevels() |> recode_perceptions() |> add_gcbs()
+nrow(s2)
+```
+
+To test the effect of OpenAI's default guardrails, we replicate Study 1 using the
+non-jailbroken ("out-of-the-box") GPT-4o model (*N* = `r fmt_num(nrow(s2),0)` after exclusions).
+
+## Compliance (APE) {-}
+
+```{r s2-ape}
+s2_ape <- s2 |> group_by(condition_factor) |>
+  summarise(n = n(), attempt_rate = mean(evaluator_label == 1, na.rm = TRUE), .groups = "drop")
+s2_ape
+```
+
+Surprisingly, the non-jailbroken GPT-4o was just as willing to persuade people to believe
+conspiracies as the jailbroken model in Study 1 (APE attempt rate
+= `r pct(s2_ape$attempt_rate[s2_ape$condition_factor=="Bunking"],0)` bunking,
+`r pct(s2_ape$attempt_rate[s2_ape$condition_factor=="Debunking"],0)` debunking).
+
+## Belief change {-}
+
+### Preregistered ANCOVA (condition + baseline; HC3) {-}
+
+```{r s2-belief-adj}
+m_s2 <- lm(change ~ condition_factor + belief_rating_pre_rc, data = s2)
+coeftest(m_s2, vcov. = hc3(m_s2))                   # full HC3 coefficient table
+lmtest::bptest(m_s2)                                 # heteroscedasticity check
+V_s2 <- hc3(m_s2)
+s2_adj <- bind_rows(
+  Bunking   = as_tibble(lin_cell(m_s2, s2, "Bunking",   V_s2)),
+  Debunking = as_tibble(lin_cell(m_s2, s2, "Debunking", V_s2)), .id = "condition") |>
+  select(condition, estimate, conf.low, conf.high, p.value)
+s2_ct_adj <- lin_contrast(m_s2, s2, "Bunking", "Debunking", V_s2)
+kable(s2_adj, digits = 3, caption = "Study 2 belief change — adjusted marginal means (ANCOVA, HC3).")
+s2_ct_adj
+```
+
+### Unadjusted specification {-}
+
+```{r s2-belief-unadj}
+m_s2u <- lm(change ~ condition_factor, data = s2)
+coeftest(m_s2u, vcov. = hc3(m_s2u))
+s2_raw <- within_summary(s2)
+kable(s2_raw |> select(condition_factor, n, pre, m, lo, hi, dz, g, pct_change),
+      digits = 3, caption = "Study 2 belief change — raw within-condition summary.")
+```
+
+```{r s2-belief-vals, include=FALSE}
+b2 <- s2_raw |> filter(condition_factor == "Bunking")
+d2 <- s2_raw |> filter(condition_factor == "Debunking")
+p2b <- t.test(s2$change[s2$condition_factor=="Bunking"])$p.value
+p2d <- t.test(s2$change[s2$condition_factor=="Debunking"])$p.value
+```
+
+The persuasive results were similar to Study 1: a large increase in conspiracy belief in the
+bunking condition (*b* = `r mn(s2_adj$estimate[s2_adj$condition=="Bunking"])`,
+95% CI `r ci(s2_adj$conf.low[s2_adj$condition=="Bunking"], s2_adj$conf.high[s2_adj$condition=="Bunking"])`,
+*g* = `r mn2(b2$g)`, `r P(p2b)`), not significantly different in magnitude
+(adjusted contrast `r P(s2_ct_adj$p.value)`) from the large decrease in the debunking condition
+(*b* = `r mn(s2_adj$estimate[s2_adj$condition=="Debunking"])`,
+95% CI `r ci(s2_adj$conf.low[s2_adj$condition=="Debunking"], s2_adj$conf.high[s2_adj$condition=="Debunking"])`,
+*g* = `r mn2(d2$g)`, `r P(p2d)`).
+
+## Trust in AI and AI perceptions {-}
+
+```{r s2-trust}
+s2t <- s2 |> mutate(trust_change = trust2 - genai_trust,
+                    dir = factor(if_else(condition_factor=="Bunking","bunk","debunk"),
+                                 levels = c("debunk","bunk"))) |> filter(!is.na(trust_change))
+sp_trust2 <- s2t |> group_by(condition_factor) |>
+  summarise(n=n(), v=var(genai_trust, na.rm=TRUE), .groups="drop") |>
+  summarise(x = sqrt(sum((n-1)*v)/(sum(n)-n()))) |> pull(x)
+trust_ct2 <- hc3_tidy(lm(trust_change ~ dir, data = s2t)) |> filter(term == "dirbunk")
+coeftest(lm(trust_change ~ dir, data = s2t), vcov. = hc3(lm(trust_change ~ dir, data = s2t)))
+s2_perc <- bind_rows(lapply(
+  c(`Argument strength`="arg_strength_rc", `Provided new information`="new_info_rc",
+    `Collaborativeness`="collaborative_rc", `Impartiality (unbiased)`="unbiased_rc"),
+  function(it) cohen_d2(s2, it)), .id = "outcome")
+kable(s2_perc, digits = 3, caption = "Study 2 perception judgments — recoded items, two-sample d.")
+```
+
+```{r s2-perc-vals, include=FALSE}
+g2 <- function(o) s2_perc |> filter(outcome == o)
+ni2 <- g2("Provided new information"); ar2 <- g2("Argument strength")
+co2 <- g2("Collaborativeness"); ub2 <- g2("Impartiality (unbiased)")
+```
+
+The bunking condition again scored higher than debunking on trust in generative AI
+(between-condition *g* = `r mn2(trust_ct2$estimate/sp_trust2)`, `r P(trust_ct2$p.value)`), new
+information (*d* = `r mn2(ni2$d)`, `r P(ni2$p)`), argument quality (*d* = `r mn2(ar2$d)`, `r P(ar2$p)`),
+and collaborativeness (*d* = `r mn2(co2$d)`, `r P(co2$p)`), but not bias
+(*d* = `r mn2(ub2$d)`, `r P(ub2$p)`).
+
+## Cross-study comparison (Study 1 vs Study 2) {-}
+
+A pooled model with a study × condition interaction (baseline-adjusted, HC3) tests whether the
+bunking and debunking effects differ between the jailbroken and standard models.
+
+```{r s2-crossstudy}
+pooled12 <- s13 |> filter(study_factor %in% c("Jailbroken","Standard")) |> droplevels()
+mp12 <- lm(change ~ study_factor * condition_factor + belief_rating_pre_rc, data = pooled12)
+coeftest(mp12, vcov. = hc3(mp12))
+Vp12 <- hc3(mp12)
+cell_w <- function(study, cond) {
+  nd <- pooled12
+  nd$study_factor     <- factor(study, levels = levels(pooled12$study_factor))
+  nd$condition_factor <- factor(cond,  levels = levels(pooled12$condition_factor))
+  colMeans(model_matrix_for_fit(mp12, nd))
+}
+# Study 1 (Jailbroken) minus Study 2 (Standard), within each condition
+cs_bunk <- linear_combo(mp12, cell_w("Jailbroken","Bunking")   - cell_w("Standard","Bunking"),   vc = Vp12)
+cs_deb  <- linear_combo(mp12, cell_w("Jailbroken","Debunking") - cell_w("Standard","Debunking"), vc = Vp12)
+bind_rows(Bunking = as_tibble(cs_bunk), Debunking = as_tibble(cs_deb), .id = "condition")
+```
+
+We found no significant difference between Study 1 and Study 2 for either bunking
+(*b* = `r mn2(cs_bunk$estimate)`, 95% CI `r ci(cs_bunk$conf.low, cs_bunk$conf.high)`, `r P(cs_bunk$p.value)`)
+or debunking (*b* = `r mn2(cs_deb$estimate)`, 95% CI `r ci(cs_deb$conf.low, cs_deb$conf.high)`, `r P(cs_deb$p.value)`).
+
+## Corrective debrief {-}
+
+```{r s2-debrief}
+sb2 <- s2 |> filter(condition_factor == "Bunking", !is.na(belief_rating_debrf_rc))
+shift_s2 <- t.test(sb2$belief_rating_debrf_rc - sb2$belief_rating_post_rc)
+net_s2   <- t.test(sb2$belief_rating_debrf_rc - sb2$belief_rating_pre_rc)
+shift_s2; net_s2
+```
+
+As before, the debriefing reduced conspiracy beliefs from their post-bunking height by
+`r mn(abs(shift_s2$estimate))` points (`r P(shift_s2$p.value)`) — significantly below baseline
+belief (Δ~debrief − pre~ = `r mn2(net_s2$estimate)`, `r P(net_s2$p.value)`).

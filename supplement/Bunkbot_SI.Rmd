@@ -1,0 +1,92 @@
+---
+title: "Supplementary Information"
+subtitle: "AI can effectively promote conspiracies unless it is truth constrained"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  bookdown::pdf_document2:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    latex_engine: xelatex
+    fig_caption: true
+    keep_tex: true
+  bookdown::html_document2:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    df_print: kable
+  bookdown::word_document2:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+fontsize: 10pt
+geometry: margin=0.85in
+header-includes:
+  - \usepackage{hyperref}
+  - \usepackage{url}
+  - \usepackage{booktabs}
+  - \usepackage{longtable}
+  - \renewcommand{\thetable}{S\arabic{table}}
+  - \renewcommand{\thefigure}{S\arabic{figure}}
+---
+
+```{r si-setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE, message = FALSE, warning = FALSE,
+  fig.align = "center", fig.width = 7.2, fig.height = 4.6, dpi = 300
+)
+
+# --- repo root (this file lives at <repo>/supplement/) -----------------------
+.here <- tryCatch(normalizePath(dirname(knitr::current_input(dir = TRUE))),
+                  error = function(e) normalizePath("."))
+REPO_ROOT <- .here
+while (!file.exists(file.path(REPO_ROOT, "code", "R", "build_all_numbers.R")) &&
+       dirname(REPO_ROOT) != REPO_ROOT) REPO_ROOT <- dirname(REPO_ROOT)
+
+source(file.path(REPO_ROOT, "code", "R", "formatting.R"))   # fmt_*, si_kable*, si_require
+si_require(c("dplyr","tidyr","stringr","knitr","kableExtra","ggplot2","scales","patchwork"))
+source(file.path(REPO_ROOT, "code", "R", "access.R"))       # num()/est()/lo()/hi()/pv()/nn()
+source(file.path(REPO_ROOT, "code", "R", "figures_v2.R"))   # dynamic SI figures over all_numbers
+si_require("grf")                                           # pooled causal-forest module
+source(file.path(REPO_ROOT, "code", "R", "ext_causal_forest.R")) # fit_causal_forest() + fig_cf_* (cached renders)
+
+# THE single source of truth: every number/table/figure derives from this live
+# recompute over raw + cached data (build_all_numbers(); no targets, no *_numbers.csv).
+# load_or_build_all_numbers() falls back to a live rebuild if the cache is corrupt.
+source(file.path(REPO_ROOT, "code", "R", "build_all_numbers.R"))
+.built <- load_or_build_all_numbers(REPO_ROOT)
+ALL_NUMBERS        <- .built$all_numbers   # global consumed by num()/est()
+all_numbers        <- .built$all_numbers   # lowercase global consumed by figures_v2 (.an())
+core_objects       <- .built$core
+# prime the causal-forest memo from the cached fit so fig_cf_cate_distribution()
+# needs NO refit on a cached-rds render (the forest is fit only when the rds is built)
+if (!is.null(.built$causal_forest)) .cf_memo$fit <- .built$causal_forest
+topic_bundle       <- .built$topic_bundle
+survey_materials   <- .built$materials$survey_materials
+key_item_wording   <- .built$materials$key_item_wording
+api_prompt_strings <- .built$materials$api_prompt_strings
+api_tables         <- .built$materials$api_tables
+persuader_prompts  <- .built$materials$persuader_prompts
+```
+
+```{r child = "sections/01_study_information.Rmd"}
+```
+
+```{r child = "sections/02_methods.Rmd"}
+```
+
+```{r child = "sections/03_materials.Rmd"}
+```
+
+```{r child = "sections/04a_results_belief.Rmd"}
+```
+
+```{r child = "sections/04b_results_speech.Rmd"}
+```
+
+```{r child = "sections/05_causal_forest.Rmd"}
+```
+
+```{r child = "sections/07_appendix_prompts.Rmd"}
+```

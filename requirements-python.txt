@@ -1,0 +1,10 @@
+# Optional Python environment for API provenance and manuscript-wiring tools.
+# The default R reproduction does not require these packages or an API key.
+litellm==1.70.0
+numpy==2.0.1
+openai==1.75.0
+pandas==2.2.2
+Pillow==12.0.0
+polars==1.29.0
+python-dotenv==1.1.0
+PyYAML==6.0.1
