@@ -175,11 +175,20 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--concurrency", type=int, default=10)
+    ap.add_argument("--inputs", default=str(V2_DIR / "stance_v2_inputs.jsonl"))
+    ap.add_argument("--jsonl-out", default=str(OUT_PATH))
+    ap.add_argument("--csv-out", default=str(CSV_PATH))
     args = ap.parse_args()
     load_env()
 
+    inputs_path = Path(args.inputs)
+    out_path = Path(args.jsonl_out)
+    csv_path = Path(args.csv_out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+
     parts: dict[str, dict] = {}
-    for line in open(V2_DIR / "stance_v2_inputs.jsonl"):
+    for line in open(inputs_path):
         it = json.loads(line)
         parts.setdefault(it["ResponseId"], it)
     participants = sorted(parts.values(), key=lambda p: p["ResponseId"])
@@ -188,8 +197,8 @@ def main() -> None:
     print(f"{len(participants)} participants x {len(MODELS)} audit models (v{AUDIT_VERSION})")
 
     done: set[str] = set()
-    if OUT_PATH.exists():
-        for line in open(OUT_PATH):
+    if out_path.exists():
+        for line in open(out_path):
             try:
                 rec = json.loads(line)
                 if rec.get("request_ok"):
@@ -210,7 +219,7 @@ def main() -> None:
             async def worker(p: dict) -> None:
                 rec = await audit_one(model, p, sem)
                 async with lock:
-                    with open(OUT_PATH, "a") as f:
+                    with open(out_path, "a") as f:
                         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
                     n["ok" if rec["request_ok"] else "err"] += 1
 
@@ -231,7 +240,7 @@ def main() -> None:
 
     TAGS = ["gpt", "claude", "gemini"]
     by_rid: dict[str, dict] = {}
-    for line in open(OUT_PATH):
+    for line in open(out_path):
         rec = json.loads(line)
         if not rec.get("request_ok"):
             continue
@@ -258,12 +267,12 @@ def main() -> None:
     cols = (["ResponseId"] + [f"{t}_orientation" for t in TAGS]
             + ["orientation_consensus", "n_votes", "canonical_claim"]
             + [f"{t}_rationale" for t in TAGS])
-    with open(CSV_PATH, "w", newline="") as f:
+    with open(csv_path, "w", newline="") as f:
         w = _csv.DictWriter(f, fieldnames=cols)
         w.writeheader()
         for rid in sorted(by_rid):
             w.writerow({c: by_rid[rid].get(c, "") for c in cols})
-    print(f"consolidated -> {CSV_PATH} ({len(by_rid)} participants)")
+    print(f"consolidated -> {csv_path} ({len(by_rid)} participants)")
     counts = Counter(r["orientation_consensus"] for r in by_rid.values())
     print("consensus orientation:", dict(counts.most_common()))
 

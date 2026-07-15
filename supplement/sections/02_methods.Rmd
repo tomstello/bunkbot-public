@@ -174,15 +174,18 @@ si_kable_styled(me_funnel_s4, caption = "Study 4 screening and inclusion funnel:
 The final funnel step --- requiring post-conversation outcomes --- removes the
 participants who were assigned a model and reached the chat but did not finish.
 The continuously-saved partial-chat log (`__js_chatPartialData1`) records how far
-each such participant got, which separates three loss classes that should not be
-pooled: a **substantive mid-conversation dropout** is a participant whose model
-replied at least once and who then abandoned the study; a **"did not begin"** loss
-is a participant who reached the chat but never sent a message; and a **"sent a
-message, no model reply"** loss is a genuine in-conversation delivery failure. The
-per-model counts in each class --- which show that the loss is dominated by the
-"did not begin" class and concentrated in Gemini (consistent with its chat
-interface failing to load as Google deprecated Gemini 3 during fielding), while
-substantive dropout is small and even across models --- are reported in the
+each such participant got, but it does not identify why an initial callback is
+absent. Qualtrics stored one chat-state object in successive 19,000-character
+chunks; these chunks are joined before parsing. The state begins with a hidden
+system prompt and the participant's earlier writing as an initial `user` message,
+neither of which is counted as a turn typed in the visible chat interface. We
+separate four mutually exclusive loss states: **no successful initial AI
+callback**, **initial AI response but no new participant turn**, **interactive
+chat followed by loss**, and **chat completed but outcomes missing**. The first
+state is causally ambiguous: it can reflect participant departure at the chatbot
+transition, failure of the iframe/client or initial model request, or departure
+while waiting. The per-model counts and the model-by-date evidence concerning the
+OpenRouter removal of the requested Gemini 3 Pro endpoint are reported in the
 Results attrition analysis (Table \@ref(tab:ra-attrition-split)).
 
 ## Statistical conventions
@@ -193,21 +196,72 @@ rating additively (an ANCOVA with no condition-by-baseline interaction), with HC
 standard errors. This matches Study 2's registered ANCOVA; because direction is
 randomized the additive baseline term is a precision adjustment and the contrast
 equals the unadjusted bunking-minus-debunking magnitude. For
-Study 4 the registered estimand is the unadjusted intention-to-treat contrast
-`outcome ~ direction * model` with HC3 standard errors, the direction effect
+Study 4 the registered analysis is the unadjusted contrast
+`outcome ~ direction * model` with HC3 standard errors among participants with
+observed post-conversation outcomes. Because outcomes are unavailable for
+participants whose conversation was not delivered or who subsequently left, this
+is not a full assignment-level intention-to-treat estimate. The direction effect is
 *equal-weighted* across the four model families rather than by realized sample
 size. When the four studies are pooled, the design is a condition-by-study (or
 condition-by-model) factorial and the quantity of interest is the *symmetry* of
 bunking and debunking --- whether movement toward the AI's assigned position is
 equal in magnitude in the two directions.
 
+Missing-outcome analyses used the confirmed-chat-start cohort in Study 4. This
+cohort contains the 1,272 participants with complete
+primary outcomes plus 81 incomplete records whose joined partial-chat history
+contains a nonempty initial assistant response ($N=1{,}353$). All included
+participants had a stored initial assistant response. Six of
+the 81 otherwise incomplete records supplied the focal post-belief rating, leaving
+75 focal belief outcomes missing; the other registered outcomes are missing for
+all 81. Their pre-conversation posts were absent from the original complete-outcome
+annotation universe. Those 81 posts were processed with the three-rater
+restatement-orientation audit and five-rater stance pipeline. Every record received all
+three orientation votes and all five stance ratings; the frozen gap classifications
+and a provenance manifest are shipped with the reproduction package. Restatement
+orientation is applied before the baseline belief rating---and any of the six
+available partial post-belief ratings---is used.
+
+Four approaches were reported: (1) every available outcome; (2) baseline
+carried forward, or zero direction-aligned change, for each missing outcome; (3)
+multiple imputation under a missing-at-random assumption; and (4) exact feasible-
+value identification intervals. The imputation model jointly imputes raw post-
+belief, post-stance, revised-post sharing likelihood, and original-post sharing
+likelihood using 50 predictive-mean-matching imputations and 20 iterations. It
+includes the eight-cell model-by-direction assignment factor; the pre-removal,
+endpoint-removal, and post-switch field regime; baseline belief, stance, sharing,
+confidence, and issue importance; age, gender, education, party, social and
+economic conservatism; prior generative-AI familiarity, use, and trust; and
+harmonized numbers and word counts of participant and assistant chat turns. The
+requested Gemini endpoint was removed from OpenRouter during fielding. Field regime
+is retained in the imputation model, but a Gemini version effect is not estimated
+because endpoint version and field period are confounded.
+
+The analysis model remains the registered unadjusted
+`outcome ~ direction * model` specification with HC3 within-imputation variances.
+Scalar estimates are combined with Rubin's rules; interaction terms are tested with
+a Rubin-pooled multivariate Wald test. Feasible-value intervals are derived from
+each participant's baseline: 0--100 post-belief and post-stance supports; $-50$ to
+$50$ support for post-treatment weighted sharing; the participant's baseline
+stance and a 0--100 sharing rating for willingness to re-share the original post;
+and 0/1 support for public posting. These are identification regions, not
+confidence intervals. Reported quantities comprise the eight model-by-direction cell effects,
+within-model directional asymmetries, equal-model average asymmetry, and registered
+direction-by-model omnibus test, together with the preregistered extensive-margin
+posting comparisons. Compliant-subset, trust, perception, debrief, mechanism,
+compliance, and claim-veracity analyses were not imputed. Because confirmed delivery is measured
+after randomization, this is an as-randomized sensitivity analysis conditional on
+chat start, not a full assignment-level intention-to-treat analysis.
+
 Two reporting rules follow throughout. First, the document default is that a
 **positive value denotes movement toward the AI's assigned position** (more belief
 under bunking, less under debunking); a few legacy contrast tables instead report a
 fixed bunking-minus-debunking or debunking-minus-bunking difference, and each such
 table states its own convention in a note. Second, every estimate is reported for
-both the as-randomized (ITT / strict) sample and the manipulation-delivered
-(compliant) sample.
+both the full observed-outcome sample (internally called `strict`) and the
+manipulation-delivered (`compliant`) subset. The separate chat-started sensitivity
+analysis above instead covers all 1,353 participants with confirmed delivery,
+including those who left before providing the complete primary-outcome battery.
 
 ## Study-Specific Model Conditions
 
@@ -303,10 +357,10 @@ non-compliant ---
 `r fmt_n(est("compliance_coverage", term="classifier_unscored") - est("compliance_coverage", term="unscored_with_transcript"))`
 produced no saved model transcript and the rest retained a transcript without a
 scorable opening attempt. Two safeguards bound any dependence on this override.
-First, the strict intention-to-treat sample --- the primary reference reported
+First, the strict observed-outcome sample --- the primary reference reported
 alongside the compliant subset for every Study-4 analysis --- retains all
-randomized conversations regardless of compliance, so the headline contrasts do
-not use these labels at all. Second, the re-scored openings are unambiguous
+outcome-complete conversations regardless of compliance, so the headline contrasts
+do not use these labels at all. Second, the re-scored openings are unambiguous
 direction-aligned attempts, so the compliant-subset estimates are materially
 unchanged whether they are included or excluded. The override resolves a coverage
 artifact; it does not depend on the choice of adjudicator.

@@ -33,7 +33,7 @@ build_all_numbers <- function(repo_root) {
   source(R("numbers_engine.R"))      # compute_s4_numbers_full(): wraps the peer compute_s4_numbers()
   source(R("materials_extractors.R"))
   ext_modules <- c(
-    "ext_s13", "ext_attrition", "ext_missing", "ext_extras", "ext_funnel_s13",
+    "ext_s13", "ext_attrition", "ext_s4_chat_started", "ext_missing", "ext_extras", "ext_funnel_s13",
     "ext_claim_prevalence", "ext_moderators", "ext_nonattempt", "ext_circumplex",
     "ext_s4_distribution", "ext_claim_counts_full", "ext_topic_contrasts",
     "ext_sm_pretreatment", "ext_perception_s4_bymodel", "ext_volume_detail", "ext_balance",
@@ -72,6 +72,7 @@ build_all_numbers <- function(repo_root) {
     ext_s13_numbers(core),
     dplyr::filter(compute_ext_attrition_numbers(core),
                   !block %in% c("screening_funnel_s13", "attention_checks")),
+    compute_s4_chat_started_sensitivity(core),
     ext_missing_numbers(core),
     compute_gold_coding_numbers(core$pkg_root),
     compute_cross_study_summary(all_numbers_core),
