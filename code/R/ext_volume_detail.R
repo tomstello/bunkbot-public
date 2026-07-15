@@ -66,7 +66,7 @@ compute_volume_detail <- function(core_objects) {
     dplyr::filter(n_aligned >= 1, !is.na(aligned_belief_change),
                   as.character(direction) %in% c("bunk", "debunk"),
                   as.character(model_pooled) %in% c("Claude", "Gemini", "GPT-5.2", "Grok"))  # Study-4 conversations
-  strict_ids <- core_objects$s4$s4$ResponseId          # the strict analytic sample (ITT)
+  strict_ids <- core_objects$s4$s4$ResponseId          # the strict observed-outcome sample
   comp_ids   <- core_objects$s4$s4_compliant$ResponseId
   # claim_role spans every conversation with extracted claims (S2 + S4, ~1,399 here);
   # restrict BOTH samples to their analytic ResponseId sets so the volume models run on

@@ -44,13 +44,13 @@ theme_si <- function(base_size = 9) {
 fig_belief_4study <- function(numbers = NULL) {
   an <- .an(numbers)
 
-  # Studies 1-3 have a single analytic sample; label it "Strict (ITT)" so it
+  # Studies 1-3 have a single analytic sample; label it "Observed outcomes" so it
   # aligns with the Study-4 strict cells on the shared shape/linetype scale.
   s13 <- an |>
     dplyr::filter(.data$section == "S1-3", .data$block == "belief_change") |>
     dplyr::transmute(
       study = "Studies 1-3 (GPT-4o)",
-      Sample = "Strict (ITT)",
+      Sample = "Observed outcomes",
       model = .data$model,
       direction = .data$direction,
       estimate = .data$estimate, conf_low = .data$conf_low, conf_high = .data$conf_high
@@ -69,7 +69,7 @@ fig_belief_4study <- function(numbers = NULL) {
       estimate = .data$estimate, conf_low = .data$conf_low, conf_high = .data$conf_high
     )
 
-  # Study 4: show BOTH the strict (ITT) and compliant cells.
+  # Study 4: show BOTH the observed-outcome and compliant cells.
   s4 <- an |>
     dplyr::filter(
       .data$block == "raw_aligned_means_cells",
@@ -79,7 +79,7 @@ fig_belief_4study <- function(numbers = NULL) {
     dplyr::transmute(
       study = "Study 4 (frontier models)",
       Sample = dplyr::recode(.data$sample,
-                             strict_n1272 = "Strict (ITT)", compliant_n1073 = "Compliant"),
+                             strict_n1272 = "Observed outcomes", compliant_n1073 = "Compliant"),
       model = .data$model,
       direction = .data$direction,
       estimate = .data$estimate, conf_low = .data$conf_low, conf_high = .data$conf_high
@@ -88,7 +88,7 @@ fig_belief_4study <- function(numbers = NULL) {
   dat <- dplyr::bind_rows(s13, s13_comp, s4) |>
     dplyr::mutate(
       direction = .dir_factor(.data$direction),
-      Sample = factor(.data$Sample, levels = c("Strict (ITT)", "Compliant")),
+      Sample = factor(.data$Sample, levels = c("Observed outcomes", "Compliant")),
       model = factor(.data$model,
                      levels = c("Jailbroken", "Standard", "Truth-Constrained", .model_levels_s4)),
       study = factor(.data$study, levels = c("Studies 1-3 (GPT-4o)", "Study 4 (frontier models)"))
@@ -105,8 +105,8 @@ fig_belief_4study <- function(numbers = NULL) {
                         fill = "white") +
     ggplot2::facet_grid(study ~ ., scales = "free_y", space = "free_y") +
     ggplot2::scale_color_manual(values = bb_colors) +
-    ggplot2::scale_shape_manual(values = c("Strict (ITT)" = 16, "Compliant" = 21)) +
-    ggplot2::scale_linetype_manual(values = c("Strict (ITT)" = "solid", "Compliant" = "22")) +
+    ggplot2::scale_shape_manual(values = c("Observed outcomes" = 16, "Compliant" = 21)) +
+    ggplot2::scale_linetype_manual(values = c("Observed outcomes" = "solid", "Compliant" = "22")) +
     ggplot2::scale_y_discrete(limits = rev) +
     ggplot2::labs(
       title = "Direction-aligned belief change across all four studies",
@@ -244,7 +244,7 @@ fig_veracity <- function(numbers = NULL) {
 fig_veracity_persuasion <- function(numbers = NULL) {
   an <- .an(numbers)
 
-  .samp_lab <- c(strict_n1272 = "Strict (ITT)", compliant_n1073 = "Compliant")
+  .samp_lab <- c(strict_n1272 = "Observed outcomes", compliant_n1073 = "Compliant")
 
   # Read BOTH samples for veracity (x) and belief change (y); join within sample.
   ver <- an |>
@@ -266,7 +266,7 @@ fig_veracity_persuasion <- function(numbers = NULL) {
   dat <- dplyr::inner_join(ver, bel, by = c("sample", "model", "direction")) |>
     dplyr::mutate(
       Sample = factor(.samp_lab[.data$sample],
-                      levels = c("Strict (ITT)", "Compliant")),
+                      levels = c("Observed outcomes", "Compliant")),
       direction = .dir_factor(.data$direction),
       model = factor(.data$model, levels = .model_levels_s4)
     )
@@ -299,7 +299,7 @@ fig_veracity_persuasion <- function(numbers = NULL) {
 # =============================================================================
 fig_volume_asymmetry <- function(numbers = NULL) {
   an <- .an(numbers)
-  .samp_lab <- c(strict_n1272 = "Strict (ITT)", compliant_n1073 = "Compliant")
+  .samp_lab <- c(strict_n1272 = "Observed outcomes", compliant_n1073 = "Compliant")
 
   vd <- an |> dplyr::filter(.data$block == "claim_volume_detail")
   # binned means (points + CI), x = mean log(aligned claims)
@@ -412,12 +412,12 @@ fig_topic_contrasts <- function(numbers = NULL) {
                   .data$term == "bunk_vs_debunk_contrast") |>
     dplyr::transmute(topic = .data$model,
                      Sample = factor(dplyr::recode(.data$sample,
-                                                   strict = "Strict (ITT)",
+                                                   strict = "Observed outcomes",
                                                    compliant = "Compliant"),
-                                     levels = c("Strict (ITT)", "Compliant")),
+                                     levels = c("Observed outcomes", "Compliant")),
                      estimate = .data$estimate,
                      conf_low = .data$conf_low, conf_high = .data$conf_high)
-  ord <- dat |> dplyr::filter(.data$Sample == "Strict (ITT)") |>
+  ord <- dat |> dplyr::filter(.data$Sample == "Observed outcomes") |>
     dplyr::arrange(.data$estimate) |> dplyr::pull(.data$topic)
   ord <- c(ord, setdiff(unique(dat$topic), ord))
   dat <- dat |> dplyr::mutate(topic = factor(.data$topic, levels = ord))
@@ -429,7 +429,7 @@ fig_topic_contrasts <- function(numbers = NULL) {
       ggplot2::aes(xmin = .data$conf_low, xmax = .data$conf_high),
       orientation = "y", width = 0, position = dodge) +
     ggplot2::geom_point(size = 2, position = dodge) +
-    ggplot2::scale_color_manual(values = c("Strict (ITT)" = "#5E35B1", "Compliant" = "#00897B")) +
+    ggplot2::scale_color_manual(values = c("Observed outcomes" = "#5E35B1", "Compliant" = "#00897B")) +
     ggplot2::labs(
       title = "Topic-specific bunk-minus-debunk belief-change contrast (HC3, 95% CI)",
       x = "Bunking − debunking aligned belief change (points)", y = NULL, color = NULL
@@ -447,7 +447,7 @@ fig_topic_contrasts <- function(numbers = NULL) {
 fig_public_speech <- function(numbers = NULL) {
   an <- .an(numbers)
 
-  # Show BOTH the strict (ITT) and compliant samples in each panel.
+  # Show BOTH the observed-outcome and compliant samples in each panel.
   base <- an |>
     dplyr::filter(.data$block == "raw_aligned_means_cells",
                   .data$sample %in% c("strict_n1272", "compliant_n1073"),
@@ -456,9 +456,9 @@ fig_public_speech <- function(numbers = NULL) {
     dplyr::mutate(
       direction = .dir_factor(.data$direction),
       Sample = factor(dplyr::recode(.data$sample,
-                                    strict_n1272 = "Strict (ITT)",
+                                    strict_n1272 = "Observed outcomes",
                                     compliant_n1073 = "Compliant"),
-                      levels = c("Strict (ITT)", "Compliant")),
+                      levels = c("Observed outcomes", "Compliant")),
       model = factor(.data$model, levels = .model_levels_s4)
     )
 
@@ -474,8 +474,8 @@ fig_public_speech <- function(numbers = NULL) {
       ggplot2::geom_point(size = 2.2, fill = "white",
                           position = ggplot2::position_dodge(width = .6)) +
       ggplot2::scale_color_manual(values = bb_colors) +
-      ggplot2::scale_shape_manual(values = c("Strict (ITT)" = 16, "Compliant" = 21)) +
-      ggplot2::scale_linetype_manual(values = c("Strict (ITT)" = "solid", "Compliant" = "22")) +
+      ggplot2::scale_shape_manual(values = c("Observed outcomes" = 16, "Compliant" = 21)) +
+      ggplot2::scale_linetype_manual(values = c("Observed outcomes" = "solid", "Compliant" = "22")) +
       ggplot2::scale_y_discrete(limits = rev) +
       ggplot2::labs(title = title, x = NULL, y = NULL, color = NULL,
                     shape = "Sample", linetype = "Sample") +
@@ -602,7 +602,7 @@ fig_secondary <- function(numbers = NULL) {
   an <- .an(numbers)
 
   # Studies 1-3 now carry BOTH samples (de-pool cleanup): map the full analytic
-  # sample -> "Strict (ITT)" and the compliant subset -> "Compliant" so they
+  # sample -> "Observed outcomes" and the compliant subset -> "Compliant" so they
   # align with the Study-4 strict/compliant cells on the shared shape/linetype
   # scale.
   s13 <- an |>
@@ -612,7 +612,7 @@ fig_secondary <- function(numbers = NULL) {
     dplyr::transmute(
       study = .data$model,
       Sample = dplyr::recode(.data$sample,
-                             full_sample = "Strict (ITT)", compliant = "Compliant"),
+                             full_sample = "Observed outcomes", compliant = "Compliant"),
       item = .data$outcome,
       estimate = .data$estimate, conf_low = .data$conf_low, conf_high = .data$conf_high
     )
@@ -625,7 +625,7 @@ fig_secondary <- function(numbers = NULL) {
     dplyr::transmute(
       study = .data$model,
       Sample = dplyr::recode(.data$sample,
-                             strict_n1272 = "Strict (ITT)", compliant_n1073 = "Compliant"),
+                             strict_n1272 = "Observed outcomes", compliant_n1073 = "Compliant"),
       item = dplyr::recode(.data$term, Impartiality = "Impartiality (unbiased)"),
       estimate = .data$estimate, conf_low = .data$conf_low, conf_high = .data$conf_high
     )
@@ -635,7 +635,7 @@ fig_secondary <- function(numbers = NULL) {
       study = factor(.data$study,
                      levels = c("Jailbroken", "Standard", "Truth-Constrained",
                                 "Claude", "Gemini", "GPT-5.2", "Grok")),
-      Sample = factor(.data$Sample, levels = c("Strict (ITT)", "Compliant")),
+      Sample = factor(.data$Sample, levels = c("Observed outcomes", "Compliant")),
       item = factor(.data$item,
                     levels = c("Argument strength", "Provided new information",
                                "Collaborativeness", "Impartiality (unbiased)"))
@@ -652,8 +652,8 @@ fig_secondary <- function(numbers = NULL) {
                         position = ggplot2::position_dodge(width = .5)) +
     ggplot2::facet_wrap(~ item, scales = "free_x") +
     ggplot2::scale_y_discrete(limits = rev) +
-    ggplot2::scale_shape_manual(values = c("Strict (ITT)" = 16, "Compliant" = 21)) +
-    ggplot2::scale_linetype_manual(values = c("Strict (ITT)" = "solid", "Compliant" = "22")) +
+    ggplot2::scale_shape_manual(values = c("Observed outcomes" = 16, "Compliant" = 21)) +
+    ggplot2::scale_linetype_manual(values = c("Observed outcomes" = "solid", "Compliant" = "22")) +
     ggplot2::guides(color = "none") +
     ggplot2::labs(
       title = "Bunk-minus-debunk gap on AI-perception items across studies",
@@ -672,7 +672,7 @@ fig_debrief_trajectory <- function(numbers = NULL) {
   an <- .an(numbers)
 
   # Studies 1-3 now carry BOTH samples (de-pool cleanup): map the full analytic
-  # sample -> "Strict (ITT)" and the compliant subset -> "Compliant". Debrief is
+  # sample -> "Observed outcomes" and the compliant subset -> "Compliant". Debrief is
   # Bunking-arm-only in S1-3 by design, so only the Bunking rows exist in each
   # sample; that is expected.
   s13 <- an |>
@@ -681,13 +681,13 @@ fig_debrief_trajectory <- function(numbers = NULL) {
     dplyr::transmute(
       study = "Studies 1-3",
       Sample = dplyr::recode(.data$sample,
-                             full_sample = "Strict (ITT)", compliant = "Compliant"),
+                             full_sample = "Observed outcomes", compliant = "Compliant"),
       model = .data$model,
       direction = .data$direction,
       estimate = .data$estimate, conf_low = .data$conf_low, conf_high = .data$conf_high
     )
 
-  # Study 4: show BOTH the strict (ITT) and compliant post-to-debrief cells.
+  # Study 4: show BOTH the observed-outcome and compliant post-to-debrief cells.
   s4 <- an |>
     dplyr::filter(.data$block == "debrief_shift",
                   .data$sample %in% c("strict_n1272", "compliant_n1073"),
@@ -696,7 +696,7 @@ fig_debrief_trajectory <- function(numbers = NULL) {
     dplyr::transmute(
       study = "Study 4",
       Sample = dplyr::recode(.data$sample,
-                             strict_n1272 = "Strict (ITT)", compliant_n1073 = "Compliant"),
+                             strict_n1272 = "Observed outcomes", compliant_n1073 = "Compliant"),
       model = .data$model,
       direction = .data$direction,
       estimate = .data$estimate, conf_low = .data$conf_low, conf_high = .data$conf_high
@@ -705,7 +705,7 @@ fig_debrief_trajectory <- function(numbers = NULL) {
   dat <- dplyr::bind_rows(s13, s4) |>
     dplyr::mutate(
       direction = .dir_factor(.data$direction),
-      Sample = factor(.data$Sample, levels = c("Strict (ITT)", "Compliant")),
+      Sample = factor(.data$Sample, levels = c("Observed outcomes", "Compliant")),
       model = factor(.data$model,
                      levels = c("Jailbroken", "Standard", "Truth-Constrained", .model_levels_s4)),
       study = factor(.data$study, levels = c("Studies 1-3", "Study 4"))
@@ -723,8 +723,8 @@ fig_debrief_trajectory <- function(numbers = NULL) {
                         position = ggplot2::position_dodge(width = .6)) +
     ggplot2::facet_grid(study ~ ., scales = "free_y", space = "free_y") +
     ggplot2::scale_color_manual(values = bb_colors) +
-    ggplot2::scale_shape_manual(values = c("Strict (ITT)" = 16, "Compliant" = 21)) +
-    ggplot2::scale_linetype_manual(values = c("Strict (ITT)" = "solid", "Compliant" = "22")) +
+    ggplot2::scale_shape_manual(values = c("Observed outcomes" = 16, "Compliant" = 21)) +
+    ggplot2::scale_linetype_manual(values = c("Observed outcomes" = "solid", "Compliant" = "22")) +
     ggplot2::scale_y_discrete(limits = rev) +
     ggplot2::labs(
       title = "Post-to-debrief belief shift by study and model",
@@ -735,22 +735,24 @@ fig_debrief_trajectory <- function(numbers = NULL) {
 }
 
 # =============================================================================
-# 15. fig_attrition — technical non-delivery vs substantive dropout by
-#     study/model. block: attrition_substantive_vs_technical
-#     (terms technical_nondelivery_n / substantive_dropout_n).
+# 15. fig_attrition — outcome-incomplete states by study/model, separating
+#     confirmed delivery from the causally ambiguous no-callback state.
+#     block: attrition_substantive_vs_technical.
 # =============================================================================
 fig_attrition <- function(numbers = NULL) {
   an <- .an(numbers)
 
-  kind_levels <- c("Substantive mid-conversation dropout",
-                   "Did not begin the conversation",
-                   "Sent a message, no model reply")
+  kind_levels <- c(
+    "No successful initial AI callback",
+    "Initial AI; no new user turn",
+    "Interactive chat, then lost",
+    "Chat completed; outcomes missing"
+  )
 
   # Per-model loss counts + the model-assigned pool, from the UNIFIED attrition
-  # block: all four studies are now classified by the SAME partial-chat-log
-  # (__js_chatPartialData1) rule, so Studies 1-3 carry real "did not begin" counts
-  # rather than being folded entirely into substantive dropout. Plotted as a
-  # PERCENTAGE of each model-assigned pool because pool sizes differ across studies.
+  # All four studies are classified by the same joined-chunk, hidden-seed-aware
+  # partial-chat rule. Plotted as a percentage of the model-assigned pool because
+  # pool sizes differ across studies.
   blk <- an |>
     dplyr::filter(.data$block == "attrition_substantive_vs_technical",
                   !is.na(.data$model),
@@ -758,16 +760,20 @@ fig_attrition <- function(numbers = NULL) {
   pool <- blk |> dplyr::filter(.data$term == "pool") |>
     dplyr::select(model, .pool = estimate)
   dat <- blk |>
-    dplyr::filter(.data$term %in% c("substantive_midchat_n", "no_message_n", "technical_no_reply_n")) |>
+    dplyr::filter(.data$term %in% c(
+      "no_successful_callback_n", "initial_ai_no_user_n",
+      "interactive_chat_then_lost_n", "chat_completed_outcomes_missing_n"
+    )) |>
     dplyr::left_join(pool, by = "model") |>
     dplyr::transmute(
       study = ifelse(.data$model %in% .model_levels_s4,
                      "Study 4 (frontier models)", "Studies 1-3 (GPT-4o)"),
       model = .data$model,
       kind = dplyr::recode(.data$term,
-        substantive_midchat_n = "Substantive mid-conversation dropout",
-        no_message_n          = "Did not begin the conversation",
-        technical_no_reply_n  = "Sent a message, no model reply"),
+        no_successful_callback_n = "No successful initial AI callback",
+        initial_ai_no_user_n = "Initial AI; no new user turn",
+        interactive_chat_then_lost_n = "Interactive chat, then lost",
+        chat_completed_outcomes_missing_n = "Chat completed; outcomes missing"),
       pct = 100 * .data$estimate / .data$.pool) |>
     dplyr::mutate(
       kind = factor(.data$kind, levels = kind_levels),
@@ -779,12 +785,13 @@ fig_attrition <- function(numbers = NULL) {
     ggplot2::geom_col(width = .7) +
     ggplot2::facet_grid(study ~ ., scales = "free_y", space = "free_y") +
     ggplot2::scale_fill_manual(values = c(
-      "Substantive mid-conversation dropout" = "#FB8C00",
-      "Did not begin the conversation"        = "#8E24AA",
-      "Sent a message, no model reply"        = "#B0BEC5")) +
+      "No successful initial AI callback" = "#8E24AA",
+      "Initial AI; no new user turn" = "#F9A825",
+      "Interactive chat, then lost" = "#EF6C00",
+      "Chat completed; outcomes missing" = "#607D8B")) +
     ggplot2::scale_y_discrete(limits = rev) +
     ggplot2::labs(
-      title = "Outcome-incomplete loss by model condition and type",
+      title = "Outcome-incomplete participants by model and stored chat state",
       subtitle = "As a percentage of each model-assigned pool (pool sizes differ across studies)",
       x = "Participants lost (% of the model-assigned pool)", y = NULL, fill = NULL
     ) +
@@ -1153,7 +1160,7 @@ fig_conversation_length <- function(numbers = NULL) {
 # =============================================================================
 fig_simple_slopes <- function(numbers = NULL) {
   an <- .an(numbers)
-  .samp_lab <- c(strict = "Strict (ITT)", compliant = "Compliant")
+  .samp_lab <- c(strict = "Observed outcomes", compliant = "Compliant")
   .study_levels <- c("Jailbroken", "Standard", "Truth-Constrained",
                      "Claude", "Gemini", "GPT-5.2", "Grok")
 

@@ -27,6 +27,11 @@ header-includes:
   - \usepackage{url}
   - \usepackage{booktabs}
   - \usepackage{longtable}
+  - \usepackage{pdflscape}
+  - \setlength{\emergencystretch}{3em}
+  - \setlength{\tabcolsep}{3pt}
+  - \renewcommand{\arraystretch}{1.08}
+  - \AtBeginEnvironment{longtable}{\setlength{\LTleft}{0pt}\setlength{\LTright}{0pt}\setlength{\LTcapwidth}{\linewidth}}
   - \renewcommand{\thetable}{S\arabic{table}}
   - \renewcommand{\thefigure}{S\arabic{figure}}
 ---
@@ -36,6 +41,21 @@ knitr::opts_chunk$set(
   echo = FALSE, message = FALSE, warning = FALSE,
   fig.align = "center", fig.width = 7.2, fig.height = 4.6, dpi = 300
 )
+if (knitr::is_latex_output()) {
+  # Device dimensions still control the plot's aspect ratio, while this output
+  # cap guarantees that even the intentionally wide 8.5-9in figures fit the page.
+  knitr::opts_chunk$set(out.width = "\\linewidth")
+}
+
+# Dynamic deployed prompts are often stored as a few very long lines. Preserve
+# them exactly in HTML, but insert visual line breaks in PDF verbatim blocks.
+pdf_wrap_verbatim <- function(x, width = 88) {
+  if (!knitr::is_latex_output() || is.na(x)) return(x)
+  lines <- strsplit(x, "\n", fixed = TRUE)[[1]]
+  paste(unlist(lapply(lines, function(line) {
+    if (!nzchar(line)) "" else strwrap(line, width = width)
+  }), use.names = FALSE), collapse = "\n")
+}
 
 # --- repo root (this file lives at <repo>/supplement/) -----------------------
 .here <- tryCatch(normalizePath(dirname(knitr::current_input(dir = TRUE))),

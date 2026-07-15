@@ -133,7 +133,7 @@ compute_manuscript_s4meth <- function(core, repo_root) {
   }
 
   s13 <- core$s13
-  s4  <- core$s4$s4                       # strict ITT sample (N = 1,272)
+  s4  <- core$s4$s4                       # observed-outcome sample (N = 1,272)
   swc <- core$s4$s4_with_compliance       # strict + APE compliance flags
 
   ## ---- 1. pooled S1+S2 cross-study contrasts (results_s2.Rmd s2-crossstudy) --

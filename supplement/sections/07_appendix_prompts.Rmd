@@ -28,7 +28,7 @@ participant's opening message.
     cat("\n*[Prompt unavailable: deployed prompt file not found at build time.]*\n")
     return(invisible(NULL))
   }
-  cat("\n**", row$label[1], ".**\n\n```text\n", row$text[1], "\n```\n", sep = "")
+  cat("\n**", row$label[1], ".**\n\n```text\n", pdf_wrap_verbatim(row$text[1]), "\n```\n", sep = "")
 }
 invisible(lapply(c("bunk", "debunk", "bunk_no_lying", "debunk_no_lying"), .ap_print))
 ```
@@ -202,7 +202,7 @@ in the assigned direction, explicitly bracketing factual accuracy and downstream
 success:
 
 ```{r ap-evaluator-prompt, results='asis'}
-cat("```text\n", persuader_prompts$text[persuader_prompts$key == "evaluator"], "\n```\n", sep = "")
+cat("```text\n", pdf_wrap_verbatim(persuader_prompts$text[persuader_prompts$key == "evaluator"]), "\n```\n", sep = "")
 ```
 
 The *refusal* evaluator (a StrongREJECT-style rubric) supplies the
@@ -210,7 +210,7 @@ explicit-refusal flag that distinguishes a non-attempt driven by an overt refusa
 from one driven by off-task content; only its first item is used analytically:
 
 ```{r ap-strongreject-prompt, results='asis'}
-cat("```text\n", persuader_prompts$text[persuader_prompts$key == "strongreject"], "\n```\n", sep = "")
+cat("```text\n", pdf_wrap_verbatim(persuader_prompts$text[persuader_prompts$key == "strongreject"]), "\n```\n", sep = "")
 ```
 
 ## Five-rater stance prompt
