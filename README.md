@@ -29,6 +29,16 @@ make manuscript-check     # verify the Word manuscript's statistics against the 
 make manuscript-wire      # write "<manuscript> (wired).docx" with corrections as tracked changes
 ```
 
+### Code Ocean / Nature Portfolio
+
+The repository includes a Code Ocean driver at [`code/run`](code/run). After
+importing the repository, select an R 4.5.x environment, restore `renv.lock`, and
+set that file as the capsule's run file. It performs one API-free recompute,
+renders both reproducible documents, rebuilds the manuscript figures, and writes
+the publication artifacts to `/results`. See [`CODE_OCEAN.md`](CODE_OCEAN.md) for
+the complete capsule setup, resource guidance, metadata, and draft Nature
+availability language.
+
 The Word manuscript itself is wired to the same recompute: every reported
 statistic has an anchored entry in [`code/manuscript_wiring/`](code/manuscript_wiring/)
 (see its README), so `make manuscript-check` proves the prose agrees with the

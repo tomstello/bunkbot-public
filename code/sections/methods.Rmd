@@ -138,21 +138,23 @@ likelihood-ratio chi-square (mirrors `compute_dropout_logistic_s13`).
 Study 4 requires a sharper treatment, because non-completion there is **not** the
 same thing as mid-conversation dropout. We classify every member of the eligible
 pool (passed all strict screens through model assignment) from the continuously
-saved partial-chat transcript (`__js_chatPartialData1`), mirroring
-`compute_attrition_substantive_vs_technical`:
+saved partial-chat transcript (`__js_chatPartialData1`). This follows the
+repository's substantive-versus-technical attrition-classification helper:
 
 * **completed** — produced post-conversation outcomes (the analytic sample);
-* **substantive mid-conversation dropout** — the model replied at least once and the
-  participant *then* abandoned the study (a genuine, partial transcript exists);
-* **no-message** — the participant reached the chat but never sent a message, so **no
-  partial transcript was ever saved**. This is a technical chat-load failure (not
-  disengagement), overwhelmingly concentrated in Gemini, whose endpoint Google was
-  deprecating during fielding.
+* **no successful initial callback** — no nonempty assistant response was stored;
+  this can reflect participant departure at the chatbot transition or technical
+  non-delivery and is not attributable at the row level;
+* **initial AI, no new participant turn** — the initial response was stored but the
+  participant did not type in the visible chat;
+* **interactive chat, then lost** — at least one visible participant turn was
+  stored before an unfinished conversation;
+* **chat completed, outcomes missing** — the chat reached its end state or a full
+  main transcript was saved, but post-conversation outcomes were absent.
 
-The test that bears on whether the analytic samples are differentially shaped is the
-**substantive** one — among participants who actually began the conversation, does
-mid-conversation dropout vary by assigned direction or by model? The technical
-no-message loss is excluded from it.
+The test that bears on direction-dependent selection is restricted to confirmed
+initial delivery. Before seeing the initial AI response, participants had no way
+to know whether they had been assigned to bunking or debunking.
 
 ```{r me-attrition-s13}
 s13_study_map <- c("Study 1" = "Jailbroken", "Study 2" = "Standard", "Study 3" = "Truth-Constrained")
@@ -178,92 +180,49 @@ kable(me_attr_s13, digits = c(0, 0, 3, 3, 0, 3),
 ```
 
 ```{r me-attrition-s4}
-# S4 pool = entrants passing all strict screens through model assignment. The raw
-# incomplete-outcome loss mixes a technical chat-load failure (a chat that never
-# loaded, concentrated in Gemini) with genuine mid-conversation disengagement. The
-# test that bears on whether the analytic samples are differentially shaped is the
-# SUBSTANTIVE one: among participants who actually began the conversation (the
-# model replied >= once), does mid-conversation dropout vary by condition? We
-# classify each non-completer from the continuously-saved partial-chat log
-# (__js_chatPartialData1), mirroring compute_attrition_substantive_vs_technical.
-parse_partial_counts <- function(cell) {
-  if (is.na(cell) || !nzchar(trimws(cell))) return(c(0L, 0L))
-  ms <- tryCatch({
-    arr <- jsonlite::fromJSON(cell, simplifyVector = TRUE); acc <- list()
-    for (s in arr) { o <- tryCatch(jsonlite::fromJSON(s, simplifyDataFrame = FALSE), error = function(e) NULL)
-                     if (!is.null(o$messages)) acc <- c(acc, o$messages) }
-    acc }, error = function(e) NULL)
-  if (is.null(ms) || !length(ms)) return(c(0L, 0L))
-  role <- vapply(ms, function(m) if (is.null(m$role)) "" else m$role, character(1))
-  cont <- vapply(ms, function(m) if (is.null(m$content)) "" else paste(as.character(m$content), collapse = ""), character(1))
-  c(sum(role == "user" & nchar(trimws(cont)) > 0L), sum(role == "assistant" & nchar(trimws(cont)) > 0L))
-}
-s4_pool <- d4$s4_raw |>
-  dplyr::filter(attention_pass, berry_pass, dedup_pass, condition_assigned, model_assigned,
-                pre_belief_present, pre_post_present, equivocal_pass, !invalid_claim,
-                nonempty(direction), belief_window_pass) |>
-  dplyr::mutate(completed = post_outcomes_present,
-                direction = factor(direction, levels = c("bunk","debunk")),
-                model = model_pooled_label(modelName))
-# Parse the partial-chat log for non-completers: count non-empty user messages and
-# model replies. A conversation that "began" has >=1 model reply.
-s4_pool$n_user <- 0L; s4_pool$n_ai <- 0L
-inc <- which(!s4_pool$completed)
-if (length(inc)) {
-  pcc <- t(vapply(s4_pool[["__js_chatPartialData1"]][inc], parse_partial_counts, integer(2)))
-  s4_pool$n_user[inc] <- pcc[, 1]; s4_pool$n_ai[inc] <- pcc[, 2]
-}
-s4_pool <- s4_pool |>
-  dplyr::mutate(loss_class = dplyr::case_when(
-    completed   ~ "completed",
-    n_ai > 0    ~ "substantive_midchat",    # model replied >=1x, then participant abandoned
-    n_user > 0  ~ "technical_no_reply",     # sent a message, model never replied (~0)
-    TRUE        ~ "no_message"))            # reached chat, never sent a message -> NO partial transcript (technical)
+# Use the shared live recompute. parse_partial_chat_state() joins Qualtrics chunks
+# and excludes the hidden initial `user` seed before the extension module creates
+# these mutually exclusive states and confirmed-delivery tests.
+me_loss_labels <- c(
+  pool = "Pool", completed = "Completed outcomes",
+  no_successful_callback_n = "No successful initial AI callback",
+  initial_ai_no_user_n = "Initial AI; no new participant turn",
+  interactive_chat_then_lost_n = "Interactive chat, then lost",
+  chat_completed_outcomes_missing_n = "Chat completed; outcomes missing"
+)
+s4_loss_by_model <- ALL_NUMBERS |>
+  dplyr::filter(block == "attrition_substantive_vs_technical",
+                sample == "strict_n1272", !is.na(model),
+                term %in% names(me_loss_labels)) |>
+  dplyr::transmute(
+    model,
+    State = factor(me_loss_labels[term], levels = unname(me_loss_labels)),
+    value = estimate
+  ) |>
+  tidyr::pivot_wider(names_from = State, values_from = value)
+kable(s4_loss_by_model, digits = 0,
+      caption = "Study 4 outcome status by model. No successful initial AI callback is causally ambiguous at the row level; it can represent participant departure at the chatbot transition or technical non-delivery.")
 
-# Loss classification BY MODEL (+ pooled), with the substantive dropout rate among
-# those who engaged (completed + substantive_midchat).
-s4_loss_by_model <- s4_pool |>
-  dplyr::count(model, loss_class) |>
-  tidyr::pivot_wider(names_from = loss_class, values_from = n, values_fill = 0)
-for (c in c("completed","substantive_midchat","technical_no_reply","no_message"))
-  if (!c %in% names(s4_loss_by_model)) s4_loss_by_model[[c]] <- 0L
-s4_loss_by_model <- s4_loss_by_model |>
-  dplyr::transmute(model, pool = completed + substantive_midchat + technical_no_reply + no_message,
-                   completed, no_message_technical = no_message, substantive_midchat,
-                   substantive_rate = substantive_midchat / (completed + substantive_midchat)) |>
-  dplyr::bind_rows(dplyr::summarise(s4_pool |> dplyr::mutate(lc = loss_class),
-    model = "ALL", pool = dplyr::n(), completed = sum(lc == "completed"),
-    no_message_technical = sum(lc == "no_message"), substantive_midchat = sum(lc == "substantive_midchat"),
-    substantive_rate = sum(lc == "substantive_midchat") / sum(lc %in% c("completed","substantive_midchat"))))
-kable(s4_loss_by_model, digits = c(0,0,0,0,0,3),
-      caption = "Study 4 conversation-pool loss classification, by model. no_message = reached the chat but never sent a message (no partial transcript saved; technical chat-load failure). substantive_midchat = a partial transcript exists (model replied) but the participant abandoned mid-conversation.")
-
-# Tests. Raw non-completion (includes technical loss) by model + by direction; and
-# the SUBSTANTIVE mid-conversation dropout among the engaged, by direction + by model.
-s4_pool <- s4_pool |> dplyr::mutate(incomplete = as.integer(!completed))
-raw_mod <- anova(glm(incomplete ~ 1, data = s4_pool, family = binomial()),
-                 glm(incomplete ~ model, data = s4_pool, family = binomial()), test = "LRT")
-engaged <- s4_pool |> dplyr::filter(loss_class %in% c("completed","substantive_midchat")) |>
-  dplyr::mutate(sub_dropout = as.integer(loss_class == "substantive_midchat"))
-sub_dir <- anova(glm(sub_dropout ~ 1, data = engaged, family = binomial()),
-                 glm(sub_dropout ~ direction, data = engaged, family = binomial()), test = "LRT")
-sub_mod <- anova(glm(sub_dropout ~ 1, data = engaged, family = binomial()),
-                 glm(sub_dropout ~ model, data = engaged, family = binomial()), test = "LRT")
-me_attr_s4 <- tibble::tibble(
-  test = c("raw non-completion ~ model (incl. technical loss)",
-           "substantive mid-conversation dropout ~ direction (engaged)",
-           "substantive mid-conversation dropout ~ model (engaged)"),
-  n = c(nrow(s4_pool), nrow(engaged), nrow(engaged)),
-  LRT_chisq = c(raw_mod$Deviance[2], sub_dir$Deviance[2], sub_mod$Deviance[2]),
-  df = c(raw_mod$Df[2], sub_dir$Df[2], sub_mod$Df[2]),
-  p = c(raw_mod$`Pr(>Chi)`[2], sub_dir$`Pr(>Chi)`[2], sub_mod$`Pr(>Chi)`[2]))
+me_attr_s4 <- ALL_NUMBERS |>
+  dplyr::filter(block == "attrition_substantive_vs_technical",
+                sample == "strict_n1272", is.na(model),
+                term %in% c("differential_attrition_by_model_LRT",
+                            "postdelivery_attrition_by_direction_LRT",
+                            "postdelivery_attrition_by_model_LRT")) |>
+  dplyr::transmute(test = term, n, LRT_chisq = statistic, df = df_num, p = p_value)
 me_attr_s4
 ```
 
 ```{r me-attr-s4-vals, include=FALSE}
-A   <- s4_loss_by_model |> dplyr::filter(model == "ALL")
-gem <- s4_loss_by_model |> dplyr::filter(model == "Gemini")
-sdir <- me_attr_s4[2, ]; smod <- me_attr_s4[3, ]
+me_a <- ALL_NUMBERS |>
+  dplyr::filter(block == "attrition_substantive_vs_technical",
+                sample == "strict_n1272", is.na(model))
+me_get <- function(term, direction = NA_character_) {
+  x <- me_a |> dplyr::filter(.data$term == term)
+  if (is.na(direction)) x <- x |> dplyr::filter(is.na(.data$direction))
+  else x <- x |> dplyr::filter(.data$direction == direction)
+  x[1, ]
+}
 ```
 
 In Studies 1–3, post-randomization attrition was unrelated to condition: the
@@ -271,21 +230,31 @@ dropout-by-condition likelihood-ratio tests were all non-significant
 (smallest *p* = `r P(min(me_attr_s13$p))`; overall dropout rates
 `r pct(me_attr_s13$dropout_rate[1])`/`r pct(me_attr_s13$dropout_rate[2])`/`r pct(me_attr_s13$dropout_rate[3])`).
 
-In Study 4, of the `r fmt_num(A$pool,0)` participants who passed every screen and were
-assigned a model, `r fmt_num(A$completed,0)` completed. The remaining loss is
-overwhelmingly **technical, not disengagement**: `r fmt_num(A$no_message_technical,0)`
-reached the chat but never sent a message — leaving no partial transcript — and these
-are concentrated in Gemini (`r fmt_num(gem$no_message_technical,0)` of
-`r fmt_num(gem$pool,0)`), whose endpoint was being deprecated during fielding (raw
-non-completion thus differs sharply by model, χ²(`r me_attr_s4$df[1]`) =
-`r mn2(me_attr_s4$LRT_chisq[1])`, `r P(me_attr_s4$p[1])`). Only
-`r fmt_num(A$substantive_midchat,0)` participants across all four models had a partial
-transcript (the model replied) and then abandoned the conversation
-(`r pct(A$substantive_rate)` of the `r fmt_num(sdir$n,0)` who engaged). This genuine
-mid-conversation dropout did not differ by assigned direction
-(χ²(`r sdir$df`) = `r mn2(sdir$LRT_chisq)`, `r P(sdir$p)`) or by model
-(χ²(`r smod$df`) = `r mn2(smod$LRT_chisq)`, `r P(smod$p)`). The analytic samples are
-therefore not differentially shaped by condition- or model-dependent disengagement.
+In Study 4, of the `r fmt_num(me_get("pool")$estimate,0)` participants who passed
+every screen and were assigned a model, `r fmt_num(me_get("completed")$estimate,0)`
+completed the primary outcomes. For
+`r fmt_num(me_get("no_successful_callback_n")$estimate,0)` incomplete records, no
+successful initial assistant callback was stored. This category cannot distinguish
+participant departure at the chatbot transition from technical non-delivery. Its
+large Gemini excess does identify an aggregate technical component: the requested
+`google/gemini-3-pro-preview` endpoint was removed from OpenRouter during fielding,
+producing a complete Gemini callback blackout before the survey switched to
+`google/gemini-3.1-pro-preview`.
+
+The relevant condition test begins after confirmed initial AI delivery, because
+participants could not know whether they had been assigned to bunking or debunking
+before that response appeared. Postdelivery outcome attrition was
+`r pct(me_get("postdelivery_attrition_rate", "bunk")$estimate)` after bunking versus
+`r pct(me_get("postdelivery_attrition_rate", "debunk")$estimate)` after debunking;
+the difference was significant ($\chi^2$(`r me_get("postdelivery_attrition_by_direction_LRT")$df_num`) =
+`r mn2(me_get("postdelivery_attrition_by_direction_LRT")$statistic)`,
+`r P(me_get("postdelivery_attrition_by_direction_LRT")$p_value)`). Postdelivery
+attrition did not differ by model ($\chi^2$(`r me_get("postdelivery_attrition_by_model_LRT")$df_num`) =
+`r mn2(me_get("postdelivery_attrition_by_model_LRT")$statistic)`,
+`r P(me_get("postdelivery_attrition_by_model_LRT")$p_value)`). Subsequent loss was
+therefore uncommon and flat across models, but modestly higher following a
+delivered bunking response; selective completion by assigned direction cannot be
+ruled out.
 
 ## Conversation descriptives {-}
 
@@ -458,7 +427,7 @@ Every Study-4 pre- and post-conversation social-media post is scored by a
 five-model consensus rater drawn from five developers
 (`claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `grok-4.3`, `deepseek-v3.2`).
 Reliability is computed live from the per-rater 0–100 `stance_score` columns in
-the consolidated stance file: the interval Krippendorff's α, the two-way ICC(2,k),
+the consolidated stance file: the interval Krippendorff's $\alpha$, the two-way ICC(2,k),
 and the mean pairwise inter-rater correlation. Off-topic and declined post rates
 are the post-conversation consensus `focal_relevance == "other_topic"` and
 `response_type == "declines_to_post"` shares (cross-checked against the
@@ -489,7 +458,7 @@ me_comp
 ```
 
 Inter-rater agreement was high: across the `r fmt_num(me_rel$n_rated_items,0)`
-rated post items the interval Krippendorff's α was
+rated post items the interval Krippendorff's $\alpha$ was
 `r mn2(me_rel$krippendorff_alpha_interval)`, the two-way ICC(2,k) was
 `r mn2(me_rel$ICC_2k)`, and the mean pairwise correlation among raters was
 `r mn2(me_rel$mean_pairwise_r)`. Among post-conversation posts, only
@@ -497,7 +466,7 @@ rated post items the interval Krippendorff's α was
 `r pct(me_comp$pct_declining)` as declining to post; these were flagged for the
 composition tables and assigned the neutral midpoint in the direction-coded
 continuous analyses. Annotation inter-rater agreement for the APE compliance
-labels — reported as 84% agreement and a Cohen's κ of 0.66 — is carried over from
+labels — reported as 84% agreement and a Cohen's $\kappa$ of 0.66 — is carried over from
 the APE instrument's original validation (Kowal et al., 2025, arXiv:2506.02873)
 and is not recomputed here.
 

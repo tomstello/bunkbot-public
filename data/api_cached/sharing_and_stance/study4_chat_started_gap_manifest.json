@@ -1,0 +1,68 @@
+{
+  "asset_version": "study4-chat-starter-gap-v1",
+  "created_utc": "2026-07-15",
+  "purpose": "Frozen orientation and baseline-stance classifications for the 81 confirmed-chat-start records omitted from the original complete-outcome scoring universe.",
+  "cohort": {
+    "confirmed_chat_starters": 1353,
+    "complete_outcome_records": 1272,
+    "gap_records": 81,
+    "observed_belief_outcomes": 1278,
+    "observed_social_outcomes": 1272
+  },
+  "orientation_audit": {
+    "prompt_version": "a2.0",
+    "models": [
+      "openrouter/openai/gpt-5.2",
+      "openrouter/anthropic/claude-sonnet-4.6",
+      "openrouter/google/gemini-3.1-pro-preview"
+    ],
+    "records": 81,
+    "valid_votes_per_record": 3,
+    "requests_ok": 243,
+    "consensus_counts": {"affirms": 79, "denies": 2, "unclear": 0, "disagree": 0},
+    "nonunanimous_reviewed": [
+      "R_1rGcwBKJS3ucUq4",
+      "R_5Fr0KWxRJyae40R",
+      "R_7eIAqnakinKyL6I"
+    ]
+  },
+  "stance_panel": {
+    "prompt_version": "v2.2",
+    "models": [
+      "openrouter/anthropic/claude-sonnet-4.6",
+      "openrouter/openai/gpt-5.2",
+      "openrouter/google/gemini-3.1-pro-preview",
+      "openrouter/x-ai/grok-4.3",
+      "openrouter/deepseek/deepseek-v3.2"
+    ],
+    "records": 81,
+    "valid_raters_per_record": 5,
+    "requests_ok": 405,
+    "consensus_not_applicable": 5,
+    "high_dispersion_reviewed": [
+      "R_1svLG66pZmaECDD",
+      "R_1tlZ3a9ixSuRXFG",
+      "R_5TSII286mss3yU4",
+      "R_7Bawu11x59osHzH"
+    ],
+    "not_applicable_reviewed": [
+      "R_1drGmHOuicTNZjr",
+      "R_37OH15LeXYTbxZO",
+      "R_6kzi3trjkumgIKL",
+      "R_7GiVunWDF9JKOC2",
+      "R_7gpYpiinKfPtFyl"
+    ]
+  },
+  "files": {
+    "study4_chat_started_orientation_gap.csv": "sha256:9147f07d81fbcccbc9d1c81cb088db59236a7677d0394866007dbe6e85c34e98",
+    "study4_chat_started_pre_stance_gap.csv": "sha256:2ef7a3ee090b81b981994bc4f21d69efd65366db67e97c9f9a6146533db6b229"
+  },
+  "pipeline_sources": {
+    "build_chat_started_gap_inputs.R": "sha256:187dac817a65382dd0d72120c1ba366fba35ccce53167fc95391692fdff3e7f4",
+    "restatement_orientation_audit_v2.py": "sha256:2fbd6c6373037c211115af8da8c26fc6d3c49a95c3ca721098362e8fd79e0fc4",
+    "build_stance_inputs_v22.py": "sha256:d68d479188793344f9f3c13a939b8d697f4d4e06b29ec8723438dd9ee91ccbf1",
+    "score_post_stance_v2.py": "sha256:9cce58225001289cc4dbe28ecdfefea30f4656b7c08271ce4ec8602caf41fca2",
+    "consolidate_stance_v2.py": "sha256:b7f6817b650ae723585f3a16ed877d88d0e270d3789b705428089cb98d8af891"
+  },
+  "reproduction": "The default numerical build reads the two shipped CSV assets and makes no API calls. The append-only per-rater JSONL response caches remain transient provenance intermediates under output/provenance_work/stance_v2/."
+}

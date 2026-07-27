@@ -37,7 +37,9 @@ vtab <- conv |>
             lo = mean_veracity - qt(.975, n_conv-1)*se,
             hi = mean_veracity + qt(.975, n_conv-1)*se, .groups = "drop")
 kable(vtab, digits = 2, caption = "Studies 1–3 aligned claim veracity by direction (conversation-level).")
+```
 
+```{r s3-veracity-standardized}
 # two-sample d (debunk vs bunk) + Welch t, per study
 vstat <- function(st) {
   cv <- conv |> filter(study == st)
@@ -266,7 +268,7 @@ more than it removes it, which is why a real (if attenuated) bunking effect surv
 ## Exploratory moderation {-}
 
 Finally we ask, exploratorily, for whom truth-constrained persuasion is strongest. Following
-`compute_moderator_numbers()`, we regress direction-aligned belief change on each z-scored
+the repository's moderator-number routine, we regress direction-aligned belief change on each z-scored
 pre-treatment moderator (baseline conspiracist ideation via the 7-item GCBS, baseline trust in
 AI, and political ideology), within condition and baseline-belief-adjusted, plus the
 condition-by-moderator interaction.
@@ -307,6 +309,9 @@ for (nm in names(mods)) {
 }
 kable(bind_rows(slope_rows), digits = 3,
       caption = "Study 3 — per-condition standardized moderator slopes (HC3, baseline-adjusted).")
+```
+
+```{r s3-moderator-interactions}
 kable(bind_rows(inter_rows), digits = 3,
       caption = "Study 3 — condition-by-moderator interactions (debunk − bunk × moderator, HC3).")
 ```

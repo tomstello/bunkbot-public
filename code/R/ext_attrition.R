@@ -12,18 +12,16 @@
 #     * dropout_logistic_s13                 -- differential attrition (dropout ~
 #                                               condition) logistic, per study, +
 #                                               an omnibus likelihood-ratio test
-#     * attrition_substantive_vs_technical   -- ALL studies: separates technical
-#                                               non-delivery (API failure / CINT
-#                                               bad data: conversation never
-#                                               started) from SUBSTANTIVE
-#                                               participant dropout. For S4 the
-#                                               raw funnel/attrition blocks already
-#                                               exist via compute_s4_numbers(); this
-#                                               block ADDS the technical-vs-
-#                                               substantive distinction the author
-#                                               requires (Gemini API non-delivery is
-#                                               ~the entire S4 loss and is excluded
-#                                               from substantive attrition).
+#     * attrition_substantive_vs_technical   -- ALL studies: separates confirmed
+#                                               initial AI delivery from the
+#                                               causally ambiguous no-callback
+#                                               state, then distinguishes initial-
+#                                               response-only, interactive-chat,
+#                                               and chat-completed losses. Model x
+#                                               date patterns identify an aggregate
+#                                               Gemini endpoint-removal component;
+#                                               individual no-callback rows are not
+#                                               labeled technical vs voluntary.
 #
 #   FAMILY 2  ENGAGEMENT (block = "engagement")
 #     * S1-3: mean user/assistant message counts, mean user/assistant whitespace
@@ -86,29 +84,7 @@
 # itself surrounded by escaping quotes and joined with the chatlogr `""`
 # convention). We strip each fragment's surrounding quotes, concatenate, then
 # unescape once and parse. Returns the messages list or NULL.
-.ext_parse_s4_transcript <- function(chunks) {
-  chunks <- chunks[!is.na(chunks) & nzchar(chunks)]
-  if (length(chunks) == 0) return(NULL)
-  inner <- vapply(
-    chunks,
-    function(s) {
-      if (startsWith(s, "\"")) s <- substr(s, 2, nchar(s))
-      if (endsWith(s, "\"")) s <- substr(s, 1, nchar(s) - 1)
-      s
-    },
-    character(1),
-    USE.NAMES = FALSE
-  )
-  joined <- paste0(inner, collapse = "")
-  joined <- gsub("\\\\\"", "\"", joined)     # \" -> "
-  joined <- gsub("\\\\\\\\", "\\\\", joined)   # \\ -> \
-  p <- tryCatch(jsonlite::fromJSON(joined, simplifyVector = FALSE), error = function(e) NULL)
-  if (is.character(p)) {
-    p <- tryCatch(jsonlite::fromJSON(p, simplifyVector = FALSE), error = function(e) NULL)
-  }
-  if (is.list(p) && !is.null(p$messages)) return(p$messages)
-  NULL
-}
+.ext_parse_s4_transcript <- parse_s4_complete_transcript
 
 # ============================================================================
 # FAMILY 1a: S1-3 screening funnel
@@ -241,44 +217,15 @@ compute_dropout_logistic_s13 <- function(core_objects) {
 }
 
 # ============================================================================
-# FAMILY 1c: substantive vs technical non-delivery, ALL studies
+# FAMILY 1c: stored delivery state and outcome attrition, ALL studies
 # ============================================================================
 
-# KEY distinction. For S4, ~90% of the conversation-pool loss is
-# TECHNICAL non-delivery (Gemini API failure / CINT bad data: the conversation
-# never started, so no transcript was saved), concentrated in Gemini. Only a
-# handful of pool members had a transcript but no post outcomes (substantive
-# participant dropout). We separate these and report per-study x model counts and
-# rates, plus a differential-attrition significance test by condition (and, for
-# S4, by model) for completeness. Technical non-delivery is EXCLUDED from
-# substantive attrition.
-#
-# For S1-3, every conversation in the eligible pool ran on the same GPT-4o
-# pipeline with no comparable technical-non-delivery channel, so technical
-# non-delivery is 0 there and all dropout is substantive; this is stated in the
-# note so the four studies are reported on one comparable framework.
-# Parse the continuously-saved partial-chat log (__js_chatPartialData1: a JSON
-# array whose single element is a stringified {"messages":[{role,content},...]})
-# into counts of non-empty user messages and non-empty model (assistant) replies.
-# This separates a conversation that functioned (>=1 model reply) from one that
-# never started (no user message) or one where a sent message went unanswered.
-.parse_partial_chat_counts <- function(cell) {
-  if (is.na(cell) || !nzchar(trimws(cell))) return(c(0L, 0L))
-  ms <- tryCatch({
-    arr <- jsonlite::fromJSON(cell, simplifyVector = TRUE)
-    acc <- list()
-    for (s in arr) {
-      o <- tryCatch(jsonlite::fromJSON(s, simplifyDataFrame = FALSE), error = function(e) NULL)
-      if (!is.null(o$messages)) acc <- c(acc, o$messages)
-    }
-    acc
-  }, error = function(e) NULL)
-  if (is.null(ms) || length(ms) == 0) return(c(0L, 0L))
-  role <- vapply(ms, function(m) if (is.null(m$role)) "" else m$role, character(1))
-  cont <- vapply(ms, function(m) if (is.null(m$content)) "" else paste(as.character(m$content), collapse = ""), character(1))
-  c(sum(role == "user" & nchar(trimws(cont)) > 0L),
-    sum(role == "assistant" & nchar(trimws(cont)) > 0L))
-}
+# The partial-chat field is diagnostic of successful transcript callbacks, not
+# of why a callback is absent. A no-callback record can reflect participant
+# departure at the chatbot transition, iframe/client failure, or initial model
+# non-delivery. `parse_partial_chat_state()` (defined in bunkbot_helpers.R) joins
+# the Qualtrics chunks before parsing and excludes the hidden pre-chat `user`
+# seed from the visible in-chat user-turn count.
 
 compute_attrition_substantive_vs_technical <- function(core_objects) {
   si_require(c("dplyr", "readr", "tibble"))
@@ -286,49 +233,42 @@ compute_attrition_substantive_vs_technical <- function(core_objects) {
 
   # ---- S4: classify each non-completer from the partial-chat message log ----
   s4raw <- core_objects$s4$s4_raw
-  pool <- s4raw |>
-    dplyr::filter(
-      attention_pass, berry_pass, dedup_pass, condition_assigned, model_assigned,
-      pre_belief_present, pre_post_present, equivocal_pass, !invalid_claim,
-      nonempty(direction), belief_window_pass
-    ) |>
-    dplyr::mutate(model = model_pooled_label(modelName), completed = post_outcomes_present)
-  # parse the partial-chat log for non-completers only (completers short-circuit)
-  pool$n_user_msg <- 0L; pool$n_ai_reply <- 0L
-  .inc <- which(!pool$completed)
-  if (length(.inc)) {
-    .pcc <- t(vapply(pool[["__js_chatPartialData1"]][.inc], .parse_partial_chat_counts, integer(2)))
-    pool$n_user_msg[.inc] <- .pcc[, 1]; pool$n_ai_reply[.inc] <- .pcc[, 2]
-  }
-  pool <- pool |>
-    dplyr::mutate(loss_class = dplyr::case_when(
-      completed                        ~ "completed",
-      n_ai_reply > 0                   ~ "substantive_midchat",   # model replied >=1x, then abandoned
-      n_user_msg > 0 & n_ai_reply == 0 ~ "technical_no_reply",    # sent a message, model never replied (== 0 observed)
-      TRUE                             ~ "no_message"             # reached the chat but never sent a message
-    ))
+  .state_names <- names(parse_partial_chat_state(""))
+  pool <- prepare_s4_delivery_pool(s4raw)
 
-  .terms <- c("pool", "completed", "substantive_midchat_n", "technical_no_reply_n",
-              "no_message_n", "substantive_attrition_rate")
+  .terms <- c(
+    "pool", "completed", "no_successful_callback_n", "initial_ai_no_user_n",
+    "interactive_chat_then_lost_n", "chat_completed_outcomes_missing_n",
+    "user_no_initial_ai_n", "last_user_without_reply_n",
+    "initial_ai_delivered_loss_n", "postdelivery_attrition_rate"
+  )
   .att_note <- paste(
     "S4 pool = passed all strict screens through model assignment.",
-    "Loss classified from the partial-chat log (__js_chatPartialData1):",
-    "substantive_midchat = the model replied at least once and the participant then abandoned the study;",
-    "technical_no_reply = the participant sent a message but the model never replied (zero observed -- no started conversation went unanswered);",
-    "no_message = reached the chat but never sent a message (dominated by Gemini, consistent with a chat that failed to load as Google was deprecating Gemini 3 during fielding).",
-    "substantive_attrition_rate = substantive_midchat / (completed + substantive_midchat).")
+    "Partial-chat chunks are joined before JSON parsing; the hidden pre-chat user seed is not counted as a visible chat turn.",
+    "no_successful_callback means no nonempty assistant response was stored and cannot distinguish transition dropout from frontend/API/provider failure;",
+    "initial_ai_no_user means an initial assistant response was stored but no new visible user turn followed;",
+    "interactive_chat_then_lost means at least one new user turn was stored before an unfinished chat;",
+    "chat_completed_outcomes_missing means nextSection was true or a complete main transcript was saved, but outcomes were missing.",
+    "The requested google/gemini-3-pro-preview endpoint was removed from OpenRouter during fielding; the model/date-specific excess is identifiable only in aggregate.")
   .att_counts <- function(df) {
     cl <- df$loss_class
-    cp <- sum(cl == "completed"); sm <- sum(cl == "substantive_midchat")
-    tn <- sum(cl == "technical_no_reply"); nm <- sum(cl == "no_message")
-    c(nrow(df), cp, sm, tn, nm, if (cp + sm > 0) sm / (cp + sm) else NA_real_)
+    cp <- sum(cl == "completed")
+    nc <- sum(cl == "no_successful_callback")
+    ia <- sum(cl == "initial_ai_no_user")
+    ic <- sum(cl == "interactive_chat_then_lost")
+    cc <- sum(cl == "chat_completed_outcomes_missing")
+    un <- sum(cl == "user_no_initial_ai")
+    lr <- sum(!df$completed & df$initial_ai == 1L & df$chat_user == 1L & df$last_user_replied == 0L)
+    dl <- sum(!df$completed & df$initial_ai == 1L)
+    c(nrow(df), cp, nc, ia, ic, cc, un, lr, dl,
+      if (cp + dl > 0) dl / (cp + dl) else NA_real_)
   }
   s4_rows <- lapply(sort(unique(pool$model)), function(m)
     tibble::tibble(model = m, term = .terms, n = sum(pool$model == m),
                    estimate = .att_counts(pool[pool$model == m, ]), note = .att_note))
   s4_total <- tibble::tibble(model = NA_character_, term = .terms, n = nrow(pool),
                              estimate = .att_counts(pool), note = paste(.att_note, "(pooled across models)."))
-  # Differential-attrition tests by condition and by model on the S4 pool
+  # Differential attrition by condition/model on the full S4 pool.
   pool <- pool |> dplyr::mutate(incomplete = as.integer(!completed))
   fit_dir <- stats::glm(incomplete ~ direction, data = pool, family = stats::binomial())
   lr_dir <- stats::anova(stats::glm(incomplete ~ 1, data = pool, family = stats::binomial()), fit_dir, test = "LRT")
@@ -341,30 +281,94 @@ compute_attrition_substantive_vs_technical <- function(core_objects) {
     statistic = c(lr_dir$Deviance[2], lr_mod$Deviance[2]),
     df_num = c(lr_dir$Df[2], lr_mod$Df[2]),
     p_value = c(lr_dir$`Pr(>Chi)`[2], lr_mod$`Pr(>Chi)`[2]),
-    note = "LRT on S4 pool incomplete-outcome indicator (incl. both technical and substantive loss; the by-model test is dominated by Gemini's technical chat-load failures, not disengagement)"
+    note = "LRT on the S4 pool incomplete-outcome indicator. The by-model test includes the Gemini endpoint-removal period; a no-callback row is not individually attributable to technical failure or participant departure."
   )
-  # Substantive-attrition test: among participants who actually began the
-  # conversation (the model replied at least once), does mid-conversation dropout
-  # vary by condition or model? This isolates genuine disengagement from the
-  # technical chat-load failures that dominate the no-message loss, and is the
-  # test that bears on whether the analytic samples are differentially shaped.
-  engaged <- pool[pool$loss_class %in% c("completed", "substantive_midchat"), , drop = FALSE]
-  engaged$sub_dropout <- as.integer(engaged$loss_class == "substantive_midchat")
-  sfit_dir <- stats::glm(sub_dropout ~ direction, data = engaged, family = stats::binomial())
-  slr_dir  <- stats::anova(stats::glm(sub_dropout ~ 1, data = engaged, family = stats::binomial()), sfit_dir, test = "LRT")
-  sfit_mod <- stats::glm(sub_dropout ~ model, data = engaged, family = stats::binomial())
-  slr_mod  <- stats::anova(stats::glm(sub_dropout ~ 1, data = engaged, family = stats::binomial()), sfit_mod, test = "LRT")
-  s4_sub_tests <- tibble::tibble(
+
+  # The condition comparison that bears on selective post-treatment attrition is
+  # restricted to confirmed delivery: all outcome completers plus noncompleters
+  # with a stored initial assistant response. Pre-callback participants could not
+  # know whether they had been assigned to bunking or debunking.
+  delivered <- pool[pool$completed | pool$initial_ai == 1L, , drop = FALSE]
+  delivered$post_dropout <- as.integer(!delivered$completed)
+  sfit_dir <- stats::glm(post_dropout ~ direction, data = delivered, family = stats::binomial())
+  slr_dir  <- stats::anova(stats::glm(post_dropout ~ 1, data = delivered, family = stats::binomial()), sfit_dir, test = "LRT")
+  sfit_mod <- stats::glm(post_dropout ~ model, data = delivered, family = stats::binomial())
+  slr_mod  <- stats::anova(stats::glm(post_dropout ~ 1, data = delivered, family = stats::binomial()), sfit_mod, test = "LRT")
+  ft_dir <- stats::fisher.test(table(delivered$direction, delivered$post_dropout))
+  s4_delivery_tests <- tibble::tibble(
     model = NA_character_,
-    term = c("substantive_attrition_by_direction_LRT", "substantive_attrition_by_model_LRT"),
-    n = nrow(engaged),
-    statistic = c(slr_dir$Deviance[2], slr_mod$Deviance[2]),
-    df_num = c(slr_dir$Df[2], slr_mod$Df[2]),
-    p_value = c(slr_dir$`Pr(>Chi)`[2], slr_mod$`Pr(>Chi)`[2]),
-    note = "LRT for SUBSTANTIVE mid-conversation dropout among participants who began the conversation (model replied at least once); excludes technical no-message / no-reply loss. Non-significance establishes the analytic samples are not differentially shaped by disengagement."
+    term = c(
+      "postdelivery_attrition_by_direction_LRT",
+      "postdelivery_attrition_by_model_LRT",
+      "postdelivery_attrition_by_direction_Fisher"
+    ),
+    n = nrow(delivered),
+    statistic = c(slr_dir$Deviance[2], slr_mod$Deviance[2], unname(ft_dir$estimate)),
+    df_num = c(slr_dir$Df[2], slr_mod$Df[2], NA_real_),
+    p_value = c(slr_dir$`Pr(>Chi)`[2], slr_mod$`Pr(>Chi)`[2], ft_dir$p.value),
+    note = "Outcome attrition among participants with confirmed initial AI delivery. Direction was not visible before delivery; Fisher's exact test is included as a small-cell robustness check."
   )
-  out[["S4"]] <- dplyr::bind_rows(s4_rows, list(s4_total), list(s4_tests), list(s4_sub_tests)) |>
+
+  s4_delivery_rates <- delivered |>
+    dplyr::group_by(direction) |>
+    dplyr::summarise(n = dplyr::n(), estimate = mean(post_dropout), .groups = "drop") |>
+    dplyr::transmute(
+      model = NA_character_, direction = as.character(direction),
+      term = "postdelivery_attrition_rate", n, estimate,
+      note = "Missing primary outcomes among participants with a stored initial assistant response, by randomized direction."
+    )
+
+  # Operational diagnostics for the Gemini endpoint-removal period.
+  pool$.field_date <- as.Date(substr(as.character(pool$StartDate), 1L, 10L))
+  .endpoint <- if ("modelName_raw" %in% names(pool)) as.character(pool$modelName_raw) else as.character(pool$modelName)
+  .blackout <- pool$model == "Gemini" &
+    .endpoint == "google/gemini-3-pro-preview" &
+    pool$.field_date >= as.Date("2026-03-28") & pool$.field_date <= as.Date("2026-03-30")
+  .gem31 <- .endpoint == "google/gemini-3.1-pro-preview"
+  .other <- pool$model != "Gemini"
+  .other_nc_rate <- mean(pool$loss_class[.other] == "no_successful_callback")
+  .gem <- pool$model == "Gemini"
+  .gem_excess <- sum(pool$loss_class[.gem] == "no_successful_callback") - sum(.gem) * .other_nc_rate
+  .no_callback <- pool$loss_class == "no_successful_callback"
+  s4_operational <- tibble::tibble(
+    model = NA_character_,
+    term = c(
+      "gemini3_blackout_pool_n", "gemini3_blackout_callback_n",
+      "gemini3_blackout_completed_n", "gemini31_pool_n",
+      "gemini31_completed_n", "gemini31_completion_rate",
+      "gemini_excess_no_callback_vs_others_n",
+      "no_callback_instruction_page_submitted_n",
+      "no_callback_progress70_n"
+    ),
+    n = nrow(pool),
+    estimate = c(
+      sum(.blackout), sum(.blackout & pool$initial_ai == 1L),
+      sum(.blackout & pool$completed), sum(.gem31),
+      sum(.gem31 & pool$completed), mean(pool$completed[.gem31]), .gem_excess,
+      sum(.no_callback & nonempty(pool[["Q89_Page Submit"]])),
+      sum(.no_callback & suppressWarnings(as.numeric(pool$Progress)) == 70, na.rm = TRUE)
+    ),
+    note = "Gemini operational audit. The requested google/gemini-3-pro-preview endpoint was removed from OpenRouter during fielding; the survey switched to google/gemini-3.1-pro-preview. Excess no-callback loss applies the non-Gemini no-callback rate to the Gemini pool."
+  )
+
+  out[["S4"]] <- dplyr::bind_rows(
+    s4_rows, list(s4_total), list(s4_tests), list(s4_delivery_tests),
+    list(s4_delivery_rates), list(s4_operational)
+  ) |>
     std_row("S4 + pooled", "attrition_substantive_vs_technical", "strict_n1272")
+
+  .burden_rows <- list(
+    `Study 4` = tibble::tibble(
+      model = "Study 4",
+      term = c("completed_total_duration_median_min", "completed_total_duration_p90_min"),
+      n = sum(pool$completed),
+      estimate = c(
+        stats::median(suppressWarnings(as.numeric(pool[["Duration (in seconds)"]][pool$completed])), na.rm = TRUE) / 60,
+        stats::quantile(suppressWarnings(as.numeric(pool[["Duration (in seconds)"]][pool$completed])), .9, na.rm = TRUE, names = FALSE) / 60
+      ),
+      note = "Total Qualtrics duration among participants with complete primary outcomes; descriptive evidence about study burden, not a causal decomposition of attrition."
+    )
+  )
 
   # ---- S1-3 ----
   paths <- core_objects$paths
@@ -381,6 +385,12 @@ compute_attrition_substantive_vs_technical <- function(core_objects) {
                  "Study 2" = "study2_standard_raw.csv.gz",
                  "Study 3" = "study3_truth_constrained_raw.csv.gz")
   for (st in names(study_map)) {
+    paper <- readr::read_csv(paths$s1s3_clean[[st]],
+                             show_col_types = FALSE, progress = FALSE)
+    .field_end <- max(as.POSIXct(paper$RecordedDate, tz = "UTC"), na.rm = TRUE)
+    .analytic_ids <- core_objects$s13 |>
+      dplyr::filter(as.character(.data$study_factor) == study_map[[st]]) |>
+      dplyr::pull(.data$response_id)
     raw <- readr::read_csv(file.path(raw_dir, raw_files[[st]]),
                            show_col_types = FALSE, progress = FALSE, name_repair = "unique")
     raw <- raw[-c(1, 2), ]   # drop the two Qualtrics metadata header rows
@@ -388,41 +398,64 @@ compute_attrition_substantive_vs_technical <- function(core_objects) {
       dplyr::mutate(
         .bp  = suppressWarnings(as.numeric(belief_rating_pre_4)),
         .bpo = suppressWarnings(as.numeric(belief_rating_post_4)),
+        .recorded = suppressWarnings(as.POSIXct(RecordedDate, tz = "UTC")),
         completed = !is.na(.bpo)
       ) |>
       dplyr::filter(
         as.logical(isEquivocal) == TRUE, .bp > 25, .bp < 75,
-        condition %in% c("treatment_mid_bunk", "treatment_mid_debunk")
+        condition %in% c("treatment_mid_bunk", "treatment_mid_debunk"),
+        is.na(.recorded) | .recorded <= .field_end
       )
-    nu <- rep(0L, nrow(d)); nr <- rep(0L, nrow(d)); inc <- which(!d$completed)
+    pmat <- matrix(0L, nrow = nrow(d), ncol = length(.state_names),
+                   dimnames = list(NULL, .state_names))
+    inc <- which(!d$completed)
     if (length(inc)) {
-      pc <- t(vapply(d[["__js_chatPartialData1"]][inc], .parse_partial_chat_counts, integer(2)))
-      nu[inc] <- pc[, 1]; nr[inc] <- pc[, 2]
+      pmat[inc, ] <- t(vapply(
+        d[["__js_chatPartialData1"]][inc], parse_partial_chat_state,
+        integer(length(.state_names))
+      ))
     }
+    d <- dplyr::bind_cols(d, as.data.frame(pmat))
+    chat_saved <- if ("chathistory01" %in% names(d)) nonempty(d$chathistory01) else rep(FALSE, nrow(d))
     cl <- dplyr::case_when(
-      d$completed       ~ "completed",
-      nr > 0            ~ "substantive_midchat",
-      nu > 0 & nr == 0  ~ "technical_no_reply",
-      TRUE              ~ "no_message"
+      d$completed ~ "completed",
+      chat_saved | d$next_section == 1L ~ "chat_completed_outcomes_missing",
+      d$initial_ai == 1L & d$chat_user == 1L ~ "interactive_chat_then_lost",
+      d$initial_ai == 1L ~ "initial_ai_no_user",
+      d$chat_user == 1L ~ "user_no_initial_ai",
+      TRUE ~ "no_successful_callback"
     )
-    cp <- sum(cl == "completed"); sm <- sum(cl == "substantive_midchat")
-    tn <- sum(cl == "technical_no_reply"); nm <- sum(cl == "no_message")
+    d$loss_class <- cl
+    vals <- .att_counts(d)
     s13_rows[[st]] <- tibble::tibble(
       model = study_map[[st]],
-      term = c("pool", "completed", "substantive_midchat_n", "technical_no_reply_n",
-               "no_message_n", "substantive_attrition_rate"),
+      term = .terms,
       n = nrow(d),
-      estimate = c(nrow(d), cp, sm, tn, nm, if (cp + sm > 0) sm / (cp + sm) else NA_real_),
+      estimate = vals,
       note = paste(
         "S1-3 pool = equivocal + 25-75 baseline-belief window + bunk/debunk arm.",
-        "Loss classified from the raw partial-chat log (__js_chatPartialData1), the SAME rule as S4 (NOT an API call):",
-        "substantive_midchat = the model replied at least once and the participant then abandoned;",
-        "no_message = reached the chat but never sent a message -- an empty log (chat never loaded) OR a system-prompt-only log (loaded, then left before sending); these participant- vs technical-cause senses are not separable at the row level;",
-        "technical_no_reply = sent a message, model never replied (0 in all three, as in S4).")
+        "The raw pool is capped at the last recorded timestamp in the corresponding paper analysis export, excluding later survey resumptions.",
+        "Loss classified from the raw partial-chat log using the same joined-chunk and hidden-seed-aware rule as S4.",
+        "A no-successful-callback record cannot distinguish participant transition dropout from technical non-delivery at the row level.")
     ) |>
       std_row("S1-3", "attrition_substantive_vs_technical", "full_sample")
+
+    .dur_keep <- d$completed & d$ResponseId %in% .analytic_ids
+    .dur <- suppressWarnings(as.numeric(d[["Duration (in seconds)"]][.dur_keep]))
+    .burden_rows[[st]] <- tibble::tibble(
+      model = study_map[[st]],
+      term = c("completed_total_duration_median_min", "completed_total_duration_p90_min"),
+      n = sum(.dur_keep),
+      estimate = c(
+        stats::median(.dur, na.rm = TRUE) / 60,
+        stats::quantile(.dur, .9, na.rm = TRUE, names = FALSE) / 60
+      ),
+      note = "Total Qualtrics duration among participants with complete primary outcomes; descriptive evidence about study burden, not a causal decomposition of attrition."
+    )
   }
   out[["S13"]] <- dplyr::bind_rows(s13_rows)
+  out[["burden"]] <- dplyr::bind_rows(.burden_rows) |>
+    std_row("S4 + pooled", "attrition_burden_context", "observed_outcomes")
 
   dplyr::bind_rows(out)
 }

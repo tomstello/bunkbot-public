@@ -80,6 +80,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--items", default=None, help="restrict to item_ids in this file")
     ap.add_argument("--out", default="study4_stance_classifications.csv")
+    ap.add_argument("--inputs", default=str(V2_DIR / "stance_v2_inputs.jsonl"))
     ap.add_argument("--replicate", type=int, default=0)
     ap.add_argument("--prompt-version", default="v2.2")
     args = ap.parse_args()
@@ -88,7 +89,11 @@ def main() -> None:
     if args.items:
         keep = {line.strip() for line in open(args.items) if line.strip()}
 
-    inputs = {json.loads(l)["item_id"]: json.loads(l) for l in open(V2_DIR / "stance_v2_inputs.jsonl")}
+    inputs = {json.loads(l)["item_id"]: json.loads(l) for l in open(args.inputs)}
+    # Scoring caches are shared and append-only; default consolidation is
+    # restricted to the supplied input universe so separate gap jobs cannot
+    # contaminate the canonical panel (or vice versa).
+    keep = set(inputs) if keep is None else keep & set(inputs)
 
     # latest ok record per (item, model)
     by_item: dict[str, dict[str, dict]] = defaultdict(dict)
@@ -151,12 +156,18 @@ def main() -> None:
     # The canonical full-panel consolidation is a SHIPPED output and goes to
     # data/api_cached/sharing_and_stance/; any other --out (e.g. a pilot
     # consolidation) is a transient intermediate and stays in the working dir.
-    if args.out == "study4_stance_classifications.csv":
+    requested_out = Path(args.out)
+    if requested_out.is_absolute():
+        out_dir = requested_out.parent
+        out_name = requested_out.name
+    elif args.out == "study4_stance_classifications.csv":
         out_dir = SHARING_DIR
+        out_name = args.out
     else:
         out_dir = WORK_DIR
+        out_name = args.out
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / args.out
+    out_path = out_dir / out_name
     with open(out_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         writer.writeheader()
@@ -170,15 +181,18 @@ def main() -> None:
     disp = sum(1 for r in rows if r["dispersion_flag"])
     print(f"consensus not_applicable: {nap} ({100*nap/len(rows):.1f}%)")
     print(f"dispersion-flagged (SD>15): {disp} ({100*disp/len(rows):.1f}%)")
-    cons = [r["consensus_score"] for r in rows if r["consensus_score"] is not None]
-    v1 = [float(r["v1_score"]) for r in rows if r["consensus_score"] is not None]
-    if len(cons) > 2:
+    paired = [(r["consensus_score"], float(r["v1_score"])) for r in rows
+              if r["consensus_score"] is not None and r["v1_score"] not in (None, "")]
+    if len(paired) > 2:
+        cons, v1 = map(list, zip(*paired))
         mean = statistics.mean
         cov = mean([(a - mean(cons)) * (b - mean(v1)) for a, b in zip(cons, v1)])
         r_ = cov / (statistics.pstdev(cons) * statistics.pstdev(v1) + 1e-12)
         print(f"consensus vs v1: r = {r_:.3f} (n={len(cons)})")
-        exact50 = sum(1 for s in cons if s == 50)
-        print(f"consensus exactly 50: {100*exact50/len(cons):.1f}% (v1 was 26.4% overall)")
+    cons_all = [r["consensus_score"] for r in rows if r["consensus_score"] is not None]
+    if cons_all:
+        exact50 = sum(1 for s in cons_all if s == 50)
+        print(f"consensus exactly 50: {100*exact50/len(cons_all):.1f}% (v1 was 26.4% overall)")
 
 
 if __name__ == "__main__":

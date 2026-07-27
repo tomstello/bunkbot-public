@@ -1,10 +1,13 @@
 # Results
 
-Two analytic samples recur and are reported together throughout: the *strict*
-(intention-to-treat) sample retains every randomized participant, and the
-*compliant* subset retains only conversations in which the model attempted the
-assigned manipulation. A claim is *direction-aligned* when its stance supports
-the position the model was assigned to argue.
+Two observed-outcome samples recur and are reported together throughout: the
+*strict* sample retains every participant with the required post-treatment
+outcomes regardless of model compliance, and the *compliant* subset retains only
+conversations in which the model attempted the assigned manipulation. A separate
+chat-started sensitivity analysis below includes all records with confirmed chatbot
+delivery, including incomplete outcome records. A
+claim is *direction-aligned* when its stance supports the position the model was
+assigned to argue.
 
 ## Sample Composition and Screening
 
@@ -87,7 +90,7 @@ belief_cells <- all_numbers |>
   tidyr::pivot_wider(names_from = term, values_from = estimate) |>
   dplyr::left_join(ci_cells, by = c("model" = "km", "direction", "sample")) |>
   dplyr::mutate(
-    Sample = dplyr::recode(sample, strict = "Strict (ITT)", compliant = "Compliant"),
+    Sample = dplyr::recode(sample, strict = "Observed outcomes", compliant = "Compliant"),
     N = fmt_n(n_cell),
     `Belief change [95% CI]` = ci,
     `Pre M (SD)` = paste0(fmt_num(pre_mean, 1), " (", fmt_num(pre_sd, 1), ")"),
@@ -102,10 +105,10 @@ belief_cells <- all_numbers |>
   dplyr::select(Study = model, Condition = direction, Sample, N,
                 `Belief change [95% CI]`, `Pre M (SD)`, `Post M (SD)`, `Pre-post r`, `Cohen d_z`)
 
-si_kable_styled(belief_cells, caption = "Direction-aligned focal-belief change and standardized within-condition effect sizes, by study, assigned direction, and analytic sample. Belief change is the direction-aligned mean (post minus pre, sign-flipped for debunking; Study 4 already aligned) with its 95% CI; positive = movement toward the AI's assigned position, negative = backfire. Pre and Post are means (SDs) on the raw reverse-coded 0-100 belief scale (higher = more conspiracy belief); pre-post r is their correlation; Cohen's d_z divides the mean aligned change by its standard deviation. Strict = full intention-to-treat sample; Compliant = two-sided-compliant conversations.")
+si_kable_styled(belief_cells, caption = "Direction-aligned focal-belief change and standardized within-condition effect sizes, by study, assigned direction, and analytic sample. Belief change is the direction-aligned mean (post minus pre, sign-flipped for debunking; Study 4 already aligned) with its 95% CI; positive = movement toward the AI's assigned position, negative = backfire. Pre and Post are means (SDs) on the raw reverse-coded 0-100 belief scale (higher = more conspiracy belief); pre-post r is their correlation; Cohen's d_z divides the mean aligned change by its standard deviation. Observed outcomes includes every eligible outcome completer regardless of model compliance; Compliant is the two-sided-compliant subset.")
 ```
 
-```{r ra-belief-fig, fig.cap="Direction-aligned focal-belief change by model condition and assigned direction across all four studies, with 95% confidence intervals. For Study 4 both the strict (intention-to-treat) and compliant samples are shown (solid points/lines = Strict (ITT); hollow points/dashed lines = Compliant); Studies 1-3 have a single analytic sample."}
+```{r ra-belief-fig, fig.cap="Direction-aligned focal-belief change by model condition and assigned direction across all four studies, with 95% confidence intervals. For Study 4 both the observed-outcome and compliant samples are shown (solid points/lines = Observed outcomes; hollow points/dashed lines = Compliant); Studies 1-3 have a single analytic sample."}
 fig_belief_4study()
 ```
 
@@ -144,7 +147,7 @@ pre-registered pooled directional contrast, equal-weighted across the four
 families, is given separately as the registered estimand in Table
 \@ref(tab:rb-prereg-aligned)). Table
 \@ref(tab:ra-model-belief-contrast) gives that contrast on aligned belief change
-for each model in both the strict (intention-to-treat) and compliant
+for each model in both the observed-outcome and compliant
 (manipulation-delivered) samples, estimated with HC3-robust standard errors. The
 sign convention is debunk minus bunk, so a positive value means the model was a
 more effective debunker than bunker. GPT-5.2 shows the largest asymmetry in both
@@ -187,7 +190,7 @@ mc <- dplyr::left_join(mc_strict, mc_comp, by = "model") |>
                 `n (strict)` = n_strict, `debunk - bunk, strict [95% CI]` = strict, `p` = p_strict,
                 `n (compliant)` = n_comp, `debunk - bunk, compliant [95% CI]` = comp, `p ` = p_comp)
 
-si_kable_styled(mc, caption = "Study 4 per-model debunk-minus-bunk contrasts in direction-aligned belief change (HC3-robust standard errors), reported on both the strict (intention-to-treat) and compliant samples. A positive value indicates the model was a more effective debunker than bunker.")
+si_kable_styled(mc, caption = "Study 4 per-model debunk-minus-bunk contrasts in direction-aligned belief change (HC3-robust standard errors), reported on both the observed-outcome and compliant samples. A positive value indicates the model was a more effective debunker than bunker.")
 ```
 
 Across the per-model rows the debunk-minus-bunk asymmetry is concentrated in
@@ -248,7 +251,7 @@ ks_tab <- dplyr::bind_rows(ks13, ks4) |>
   dplyr::select(`Model condition` = model,
                 `KS D, strict (p)` = strict, `KS D, compliant (p)` = comp)
 
-si_kable_styled(ks_tab, caption = "Two-sample Kolmogorov-Smirnov distance D between the bunking and debunking distributions of direction-aligned belief change, by model condition, with its p-value. Studies 1-3 (single analytic sample) appear in the strict column; Study 4 reports the per-model tests on the strict (intention-to-treat) and compliant samples.")
+si_kable_styled(ks_tab, caption = "Two-sample Kolmogorov-Smirnov distance D between the bunking and debunking distributions of direction-aligned belief change, by model condition, with its p-value. Studies 1-3 (single analytic sample) appear in the strict column; Study 4 reports the per-model tests on the observed-outcome and compliant samples.")
 ```
 
 ```{r ra-large-shift}
@@ -298,20 +301,11 @@ fig_belief_trajectory()
 
 ## Attrition
 
-The screening funnel that defines each analytic sample --- attention and bot
-screens, the equivocality classifier, the baseline-belief window, and the
-completed-conversation requirement --- is given once in the Methods (Per-Study
-Screening Pipelines; Table \@ref(tab:me-attention) and Table
-\@ref(tab:me-funnel-s4)) and, for Studies 1-3, in Figure
-\@ref(fig:ra-funnel-s13) above. What matters for inference is whether the loss that
-remains is *differential* by the randomized assignment, which would threaten the
-treatment comparison, and, in Study 4, *how* incomplete conversations were lost.
-This subsection treats both, for all four studies together.
-
-For Studies 1-3, the question is whether post-conversation dropout depends on
-assigned direction (Table \@ref(tab:ra-dropout-logistic)). A non-significant
-likelihood-ratio test indicates that attrition does not track the randomized
-condition.
+The analytic screening funnels are reported in Tables \@ref(tab:me-attention) and
+\@ref(tab:me-funnel-s4) and Figure \@ref(fig:ra-funnel-s13). Table
+\@ref(tab:ra-dropout-logistic) reports logistic regressions of post-conversation
+dropout on assigned direction for Studies 1--3. The likelihood-ratio tests were
+not statistically significant in any study.
 
 ```{r ra-dropout-logistic}
 drop <- all_numbers |>
@@ -331,156 +325,274 @@ drop <- all_numbers |>
 si_kable_styled(drop, caption = "Studies 1-3 differential-attrition tests: logistic regression of post-conversation dropout on assigned direction, by GPT-4o variant. The LRT row reports the likelihood-ratio p-value for direction-dependent attrition; other rows report estimate [95% CI], p.")
 ```
 
-For Study 4, the `r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="pool") - est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="completed"))`
-participants who reached the conversation stage but did not complete the outcome
-measures are classified by *how* the conversation was lost, into three mutually
-exclusive states. The classification is read directly from the continuously-saved
-partial-chat log (the `__js_chatPartialData1` Qualtrics field) by counting non-empty
-user and model messages --- it is a parse of the saved conversation data, **not** a
-separate model or API judgement --- and the identical rule is applied to Studies 1-3.
-A **substantive mid-conversation dropout** is a participant
-whose conversation worked --- the model replied at least once --- and who then
-abandoned the study. A **"did not begin the conversation"** loss is a participant
-whose saved log records no sent message; this category is inherently ambiguous,
-spanning both a participant who reached a working chat and left before typing and a
-participant for whom the chat interface never loaded. The log can separate an
-*empty* record (chat never loaded) from a *system-prompt-only* record (loaded, then
-left before sending), but cannot attribute participant- versus technical-cause at
-the row level. A **"sent a message, no model
-reply"** loss would be a genuine in-conversation delivery failure --- and there are
-`r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="technical_no_reply_n"))`
-of them.
+For Study 4, `r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="pool"))`
+participants satisfied the analytic eligibility criteria and reached the transition
+into the experimental conversation. Of these,
+`r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="completed"))`
+completed the primary post-conversation outcomes and
+`r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="pool") - est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="completed"))`
+did not.
 
-Three facts follow (Table \@ref(tab:ra-attrition-split), Figure
-\@ref(fig:ra-attrition-fig)). First, substantive mid-conversation dropout is small
-and even across models ---
-`r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="substantive_midchat_n"))`
-in total, 9--20 per model --- so participants who actually engaged rarely
-abandoned. Second, almost all of the loss is the
-`r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="no_message_n"))`
-participants for whom **no partial chat log was ever written**: the chat
-interface never loaded, or it loaded but they left before clicking start and
-seeing the AI's first message. The partial-chat log is written by the survey
-only after the chat app initializes and posts its message history back to
-Qualtrics (the `setJSEmbeddedData("chatPartialData1", ...)` call fires only in
-that callback), so an empty log means the conversation never began at all. This
-loss is overwhelmingly Gemini:
-`r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model="Gemini", term="no_message_n"))`
-of the `r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="no_message_n"))`,
-versus 96--150 for each of the other three models. Because model
-assignment was random, a participant-side cause would fall roughly uniformly
-across models; the Gemini excess instead points to a technical cause --- the chat
-interface failing to load --- which is exactly what one would expect, since Google
-was deprecating Gemini 3 during fielding. The non-Gemini "did not begin" counts
-therefore reflect ordinary pre-conversation non-engagement, whereas Gemini's
-excess is the genuine technical loss; that technical component is identifiable at
-the model level rather than per participant. Either way, *substantive* attrition --- a working
-conversation that the participant abandoned --- is low and even across models, so
-the analytic samples are not differentially shaped by participant disengagement.
+Incomplete records were classified from the joined 19,000-character chunks of
+`__js_chatPartialData1` and, where available, the complete chat-history fields.
+The parser excluded the seeded system prompt and prior participant writing. A
+stored nonempty assistant message defined confirmed initial delivery.
+
+Among the outcome-incomplete participants,
+`r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="initial_ai_delivered_loss_n"))`
+had a stored initial AI response. Of these,
+`r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="initial_ai_no_user_n"))`
+received the initial response but did not enter a new message,
+`r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="interactive_chat_then_lost_n"))`
+began an interactive conversation but left before completing it, and
+`r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="chat_completed_outcomes_missing_n"))`
+completed the conversation but did not provide the primary outcomes.
+`r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="last_user_without_reply_n"))`
+of the
+interactive records ended after a participant turn without a subsequent nonempty
+assistant reply; the other interactive records contain a later assistant response.
+
+The remaining
+`r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="no_successful_callback_n"))`
+records contained no successful initial chatbot callback.
+`r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="no_callback_instruction_page_submitted_n"))`
+of these participants submitted the immediately preceding page explaining the
+chatbot task. The stored data do not distinguish participant departure from
+iframe, API, or provider failure.
+
+The survey requested the OpenRouter endpoint
+`google/gemini-3-pro-preview`, which was removed from OpenRouter during fielding.
+From March 28--30,
+`r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="gemini3_blackout_pool_n"))`
+eligible Gemini 3 assignments produced
+`r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="gemini3_blackout_callback_n"))`
+stored callbacks and
+`r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="gemini3_blackout_completed_n"))`
+completed outcomes, while the other models continued operating. After the requested
+model was changed to `google/gemini-3.1-pro-preview`,
+`r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="gemini31_completed_n"))`
+of `r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="gemini31_pool_n"))`
+Gemini assignments completed (`r fmt_pct(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="gemini31_completion_rate"), 1)`).
+Applying the non-Gemini no-callback rate to the Gemini pool yielded approximately
+`r fmt_n(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="gemini_excess_no_callback_vs_others_n"))`
+excess Gemini no-callback records.
 
 ```{r ra-attrition-split}
-.lab <- c(pool = "Model-assigned pool", completed = "Completed (analytic)",
-          substantive_midchat_n = "Substantive mid-conversation dropout",
-          no_message_n = "Did not begin the conversation",
-          technical_no_reply_n = "Sent a message, no model reply",
-          substantive_attrition_rate = "Substantive attrition rate")
+.lab <- c(
+  pool = "Model-assigned analytic pool",
+  completed = "Completed primary outcomes",
+  no_successful_callback_n = "No successful initial AI callback",
+  initial_ai_no_user_n = "Initial AI delivered; no new participant turn",
+  interactive_chat_then_lost_n = "Interactive chat, then lost",
+  chat_completed_outcomes_missing_n = "Chat completed; outcomes missing",
+  postdelivery_attrition_rate = "Postdelivery outcome attrition rate"
+)
 att <- all_numbers |>
   dplyr::filter(block == "attrition_substantive_vs_technical",
                 model %in% c("Claude", "Gemini", "GPT-5.2", "Grok"),
                 term %in% names(.lab)) |>
   dplyr::mutate(Stage = factor(.lab[term], levels = .lab),
                 model = factor(model, levels = c("Claude", "Gemini", "GPT-5.2", "Grok")),
-                value = ifelse(term == "substantive_attrition_rate",
+                value = ifelse(term == "postdelivery_attrition_rate",
                                scales::percent(estimate, accuracy = 0.1), fmt_num(estimate, 0))) |>
   dplyr::arrange(Stage, model) |>
   dplyr::select(Stage, model, value) |>
   tidyr::pivot_wider(names_from = model, values_from = value)
 
-si_kable_styled(att, caption = "Study 4 outcome-incomplete loss by model (strict sample): substantive mid-conversation dropout, 'did not begin the conversation' (reached the chat but never sent a message), and 'sent a message, no model reply'. The middle category dominates and is concentrated in Gemini, consistent with a chat that failed to load during Gemini 3's deprecation; no started conversation went unanswered. The substantive attrition rate is substantive mid-conversation dropout divided by (completed + that dropout).")
+si_kable_styled(att, caption = "Study 4 outcome status after chatbot assignment. 'No successful initial AI callback' denotes no stored nonempty assistant response. Postdelivery attrition is calculated among outcome completers plus incomplete participants with a stored initial AI response.")
 ```
 
-The likelihood-ratio tests in Table \@ref(tab:ra-attrition-lrt) make this split
-formal, but the definition of "attrition" must be read carefully. The first two
-rows test the *overall* incomplete-outcome indicator --- every participant who did
-not finish the outcome measures, regardless of how the conversation was lost. On
-that definition the by-model test is significant, but only because it is dominated
-by Gemini's chat-load failures: it is detecting the technical loss documented
-above, not condition-dependent disengagement. The substantive-only rows isolate
-mid-conversation dropout among
-the
-`r fmt_n(nn("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="substantive_attrition_by_direction_LRT"))`
-participants who genuinely began the conversation (the model replied at least
-once). On that engaged subset, dropout does not vary by assigned direction
-(*p* = `r fmt_p(pv("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="substantive_attrition_by_direction_LRT"))`)
-or by model category
-(*p* = `r fmt_p(pv("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="substantive_attrition_by_model_LRT"))`).
-Genuine disengagement is therefore flat across condition and model, and the
-analytic samples are not differentially shaped by it.
+Among the
+`r fmt_n(nn("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="postdelivery_attrition_by_direction_LRT"))`
+participants with confirmed initial delivery, outcome attrition was
+`r fmt_pct(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, direction="bunk", term="postdelivery_attrition_rate"), 1)`
+in the bunking condition and
+`r fmt_pct(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, direction="debunk", term="postdelivery_attrition_rate"), 1)`
+in the debunking condition. This difference was statistically significant by the
+likelihood-ratio test (*p* =
+`r fmt_p(pv("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="postdelivery_attrition_by_direction_LRT"))`)
+and remained significant by Fisher's exact test (*p* =
+`r fmt_p(pv("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="postdelivery_attrition_by_direction_Fisher"))`).
+Postdelivery attrition did not differ across model categories (*p* =
+`r fmt_p(pv("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, term="postdelivery_attrition_by_model_LRT"))`).
 
 ```{r ra-attrition-lrt}
 att_lrt <- all_numbers |>
   dplyr::filter(block == "attrition_substantive_vs_technical", is.na(model),
                 term %in% c("differential_attrition_by_direction_LRT",
                             "differential_attrition_by_model_LRT",
-                            "substantive_attrition_by_direction_LRT",
-                            "substantive_attrition_by_model_LRT")) |>
+                            "postdelivery_attrition_by_direction_LRT",
+                            "postdelivery_attrition_by_model_LRT")) |>
   dplyr::mutate(
-    Outcome = ifelse(grepl("^substantive", term),
-                     "Substantive mid-conversation dropout (engaged only)",
+    Outcome = ifelse(grepl("^postdelivery", term),
+                     "Missing outcome after confirmed initial AI delivery",
                      "Overall incomplete outcome"),
     test = dplyr::recode(term,
       differential_attrition_by_direction_LRT = "By assigned direction",
       differential_attrition_by_model_LRT = "By model category",
-      substantive_attrition_by_direction_LRT = "By assigned direction",
-      substantive_attrition_by_model_LRT = "By model category"),
+      postdelivery_attrition_by_direction_LRT = "By assigned direction",
+      postdelivery_attrition_by_model_LRT = "By model category"),
     Outcome = factor(Outcome, levels = c("Overall incomplete outcome",
-                                         "Substantive mid-conversation dropout (engaged only)"))) |>
+                                         "Missing outcome after confirmed initial AI delivery"))) |>
   dplyr::arrange(Outcome, test) |>
   dplyr::select(Outcome, Test = test, n, p = p_value) |>
   dplyr::mutate(p = fmt_p(p))
 
-si_kable_styled(att_lrt, caption = "Study 4 likelihood-ratio tests for differential attrition by assigned direction and by model category, under two attrition definitions. The overall-incomplete-outcome tests (n = 2,114) include the pre-conversation chat-load loss, so the by-model test is significant only because of Gemini's technical failures. The substantive tests restrict to the participants who actually began the conversation (n = 1,333 engaged) and test mid-conversation dropout; both are non-significant, so genuine disengagement does not vary by condition or model.")
+si_kable_styled(att_lrt, caption = "Study 4 likelihood-ratio tests for differential outcome attrition. Overall incompleteness includes the no-callback state. The confirmed-delivery analysis includes all outcome completers and incomplete participants with a stored initial AI response.")
 ```
 
-```{r ra-attrition-fig, fig.cap="Outcome-incomplete loss by model condition across all four studies, as a percentage of each model-assigned pool (pool sizes differ across studies): substantive mid-conversation dropout (the model replied, then the participant abandoned the study) versus 'did not begin the conversation' (the saved partial-chat log records no sent message -- chat never loaded, or loaded but left before typing). All four studies are classified by the same partial-chat-log rule. Studies 1-3 lose a small share to each (the 'did not begin' loss there is ordinary pre-conversation non-engagement, with no chat-load-failure channel); in Study 4, Gemini's large 'did not begin' bar reflects chat-load failures during its deprecation. 'Sent a message, no model reply' is zero in every study."}
+Among participants with complete primary outcomes, median total survey duration was
+`r fmt_num(est("attrition_burden_context", model="Study 4", term="completed_total_duration_median_min"), 1)`
+minutes in Study 4, compared with
+`r fmt_num(est("attrition_burden_context", model="Jailbroken", term="completed_total_duration_median_min"), 1)`,
+`r fmt_num(est("attrition_burden_context", model="Standard", term="completed_total_duration_median_min"), 1)`, and
+`r fmt_num(est("attrition_burden_context", model="Truth-Constrained", term="completed_total_duration_median_min"), 1)`
+minutes in Studies 1--3. Study 4 included open-ended writing, the
+pre-conversation social-media paradigm, and the chatbot task.
+Postdelivery outcome attrition was
+`r fmt_pct(est("attrition_substantive_vs_technical", sample="strict_n1272", model=NA, direction=NA, term="postdelivery_attrition_rate"), 1)`
+in Study 4 and
+`r fmt_pct(est("attrition_substantive_vs_technical", sample="full_sample", model="Jailbroken", term="postdelivery_attrition_rate"), 1)`,
+`r fmt_pct(est("attrition_substantive_vs_technical", sample="full_sample", model="Standard", term="postdelivery_attrition_rate"), 1)`, and
+`r fmt_pct(est("attrition_substantive_vs_technical", sample="full_sample", model="Truth-Constrained", term="postdelivery_attrition_rate"), 1)`
+in Studies 1--3, respectively.
+
+```{r ra-attrition-burden}
+burden <- all_numbers |>
+  dplyr::filter(block == "attrition_burden_context") |>
+  dplyr::mutate(
+    Study = dplyr::recode(model,
+      Jailbroken = "Study 1", Standard = "Study 2",
+      `Truth-Constrained` = "Study 3", `Study 4` = "Study 4"),
+    measure = dplyr::recode(term,
+      completed_total_duration_median_min = "Median",
+      completed_total_duration_p90_min = "90th percentile"),
+    value = fmt_num(estimate, 1)
+  ) |>
+  dplyr::select(Study, `Outcome completers` = n, measure, value) |>
+  tidyr::pivot_wider(names_from = measure, values_from = value) |>
+  dplyr::arrange(Study)
+
+si_kable_styled(burden, caption = "Total Qualtrics duration in minutes among participants with complete primary outcomes.")
+```
+
+### Missing-outcome analyses among confirmed chat starters
+
+The confirmed-chat-start cohort contains 1,353 participants: the 1,272 participants
+with complete primary outcomes and 81 otherwise incomplete records containing a
+stored initial assistant response. Six participants who did not complete the full
+primary-outcome battery nevertheless supplied the focal post-belief rating. The
+belief-specific observed-outcome reference therefore uses all 1,278 available
+ratings, with their restatement orientation corrected in the same way as in the
+complete-outcome sample; the remaining 75 belief outcomes are missing. The
+pre-conversation posts for all 81 records were audited with three orientation
+raters and five stance raters. Table \@ref(tab:ra-s4-chat-started) reports the
+eight model-by-direction aligned belief effects under available outcomes, zero
+change for missing outcomes, MAR multiple imputation, and 0--100-scale
+identification bounds.
+
+```{r ra-s4-chat-started}
+s4b_cells <- all_numbers |>
+  dplyr::filter(block == "s4_chat_started_cell_effects",
+                sample == "chat_started_n1353",
+                outcome == "aligned_belief_change") |>
+  dplyr::mutate(
+    Approach = dplyr::recode(term,
+      available_outcomes = "Available outcomes",
+      zero_change = "Zero change if missing",
+      mi_mar = "MAR multiple imputation",
+      support_bounds = "Feasible-value bounds"),
+    value = dplyr::if_else(term == "support_bounds",
+      paste0("[", fmt_num(conf_low, 1), ", ", fmt_num(conf_high, 1), "]"),
+      fmt_ci(estimate, conf_low, conf_high, 1)
+    ),
+    .m = match(model, c("Claude", "Gemini", "GPT-5.2", "Grok")),
+    Direction = dplyr::recode(direction, bunk = "Bunk", debunk = "Debunk")
+  ) |>
+  dplyr::arrange(.m, Direction) |>
+  dplyr::group_by(model, Direction) |>
+  dplyr::mutate(`Available N` = n[term == "available_outcomes"][1]) |>
+  dplyr::ungroup() |>
+  dplyr::select(Model = model, Direction, `Available N`, Approach, value) |>
+  tidyr::pivot_wider(names_from = Approach, values_from = value)
+
+si_kable_styled(
+  s4b_cells,
+  caption = "Direction-aligned belief change by Study 4 model and direction among 1,353 confirmed chat starters. Point estimates are reported with 95% CIs; feasible-value bounds are identification intervals. Available-outcome N = 1,278."
+)
+```
+
+The GPT-5.2 bunking estimates and feasible-value interval were below zero. The
+feasible-value intervals for the other seven model-by-direction cells were above
+zero.
+
+```{r ra-s4-chat-started-model-asymmetry}
+s4b_asym <- all_numbers |>
+  dplyr::filter(block == "s4_chat_started_model_contrasts",
+                sample == "chat_started_n1353",
+                outcome == "aligned_belief_change") |>
+  dplyr::mutate(
+    Approach = dplyr::recode(term,
+      available_outcomes = "Available outcomes",
+      zero_change = "Zero change if missing",
+      mi_mar = "MAR multiple imputation",
+      support_bounds = "Feasible-value bounds"),
+    value = dplyr::if_else(term == "support_bounds",
+      paste0("[", fmt_num(conf_low, 1), ", ", fmt_num(conf_high, 1), "]"),
+      paste0(fmt_ci(estimate, conf_low, conf_high, 1), "; p ", fmt_p(p_value))),
+    .m = match(model, c("Claude", "Gemini", "GPT-5.2", "Grok"))
+  ) |>
+  dplyr::arrange(.m) |>
+  dplyr::select(Model = model, Approach, value) |>
+  tidyr::pivot_wider(names_from = Approach, values_from = value)
+
+si_kable_styled(
+  s4b_asym,
+  caption = "Within-model debunk-minus-bunk asymmetry in direction-aligned belief change among confirmed chat starters. Point rows give estimate [95% CI] and p; positive values favor debunking. Feasible-value endpoints are identification bounds, not confidence limits."
+)
+```
+
+The debunk-minus-bunk estimates were negative for Claude, positive for Gemini and
+GPT-5.2, and not statistically significant for Grok. The feasible-value interval
+included zero for Grok and excluded zero for the other three models. Table
+\@ref(tab:ra-s4-chat-started-registered-belief) reports the equal-model average
+and direction-by-model omnibus test.
+
+```{r ra-s4-chat-started-registered-belief}
+s4b_reg <- all_numbers |>
+  dplyr::filter(block == "s4_chat_started_registered_tests",
+                sample == "chat_started_n1353",
+                outcome == "aligned_belief_change") |>
+  dplyr::mutate(
+    Approach = dplyr::case_when(
+      grepl("^available_outcomes", term) ~ "Available outcomes",
+      grepl("^zero_change", term) ~ "Zero change if missing",
+      grepl("^mi_mar", term) ~ "MAR multiple imputation",
+      TRUE ~ "Feasible-value bounds"),
+    Result = dplyr::case_when(
+      direction == "direction-x-model" ~ paste0("omnibus p ", fmt_p(p_value)),
+      grepl("^support_bounds", term) ~ paste0("average [", fmt_num(conf_low, 1), ", ", fmt_num(conf_high, 1), "]"),
+      TRUE ~ paste0("average ", fmt_ci(estimate, conf_low, conf_high, 1), "; p ", fmt_p(p_value))
+    )
+  ) |>
+  dplyr::select(Approach, direction, Result) |>
+  tidyr::pivot_wider(names_from = direction, values_from = Result, values_fill = "---") |>
+  dplyr::rename(`Equal-model debunk - bunk` = `debunk-minus-bunk`,
+                `Direction x model` = `direction-x-model`)
+si_kable_styled(
+  s4b_reg,
+  caption = "Registered belief asymmetry among confirmed chat starters: the equal-model debunk-minus-bunk contrast and direction-by-model omnibus test. The MAR omnibus is a Rubin-pooled HC3 multivariate Wald test; available and zero-change omnibus p-values are HC3 F tests. Bound endpoints are not confidence limits."
+)
+```
+
+The equal-model debunk-minus-bunk estimate was positive under each point-estimation
+approach; its feasible-value interval excluded zero. Direction-by-model omnibus
+tests had *p* < .001 under available outcomes, zero change, and MAR imputation.
+Section \@ref(chat-started-speech) reports the public-speech results. Analyses are
+conditional on confirmed chat start.
+
+```{r ra-attrition-fig, fig.pos='H', fig.cap="Outcome-incomplete states by model condition across all four studies, as a percentage of each model-assigned pool. 'No successful initial AI callback' indicates that no nonempty assistant response was stored. The requested Study 4 Gemini endpoint was removed from OpenRouter during fielding."}
 fig_attrition()
-```
-
-```{r ra-attrition-diff-tests}
-adt <- all_numbers |>
-  dplyr::filter(block == "attrition_tests", sample == "strict_n1272") |>
-  dplyr::mutate(Term = dplyr::recode(term,
-                  direction_main = "Direction (randomized)",
-                  model_main = "Model category",
-                  direction_x_model = "Direction x model"),
-                F = fmt_num(statistic, 2),
-                df = paste0(df_num, ", ", df_den),
-                p = fmt_p(p_value)) |>
-  dplyr::select(Term, `n` = n, `F` = F, `df` = df, p)
-
-si_kable_styled(adt, caption = "Study 4 differential-attrition test: joint F-tests from a linear-probability model of completion on assigned direction, model category, and their interaction (HC3-robust standard errors). Completion does not depend on the randomized direction or on its interaction with model.")
-```
-
-Third, the loss is localized per model (Table \@ref(tab:ra-attrition-chat-bymodel)):
-the "no chat content" state --- a participant for whom the chat never loaded or who
-never engaged --- dominates and is overwhelmingly Gemini, the same chat-load
-signature seen above, while the partial-then-lost and saved-but-incomplete states
-are small and even across the four models.
-
-```{r ra-attrition-chat-bymodel}
-.clab <- c(chat_saved_missing_outcomes = "Saved chat, missing outcomes",
-           no_chat_content = "No chat content",
-           partial_chat_then_lost = "Partial chat, then lost")
-acm <- all_numbers |>
-  dplyr::filter(block == "attrition_chat_diagnosis_by_model", sample == "strict_n1272") |>
-  dplyr::mutate(State = factor(.clab[term], levels = .clab),
-                model = factor(model, levels = c("Claude", "Gemini", "GPT-5.2", "Grok")),
-                value = fmt_num(estimate, 0)) |>
-  dplyr::arrange(State, model) |>
-  dplyr::select(State, model, value) |>
-  tidyr::pivot_wider(names_from = model, values_from = value)
-
-si_kable_styled(acm, caption = "Study 4 outcome-incomplete loss by model (strict sample), classified as a saved chat with missing outcomes, no chat content, or a partial chat then lost. 'No chat content' dominates and is concentrated in Gemini, consistent with the chat interface failing to load during Gemini 3's deprecation; the other two states are small and even across models.")
 ```
 
 ## Engagement
@@ -759,7 +871,7 @@ Table \@ref(tab:ra-trust-allstudies) places the Studies 1-3 per-variant
 bunking-minus-debunking trust contrast (pre-to-post change) alongside two Study 4
 rows: the same pre-to-post change contrast (strict sample, models pooled) and the
 registered contrast on the post-treatment trust item, the latter on both the
-strict (intention-to-treat) and compliant samples. The contrast is small in
+observed-outcome and compliant samples. The contrast is small in
 Studies 1-3 — significant only for the Jailbroken variant — with the Study 4
 rows shown on both the change and post-only footings. Study 4 also re-administered the
 trust item after the corrective debrief (`trust_debrf`); the post-to-debrief
@@ -796,7 +908,7 @@ trust_all <- dplyr::bind_rows(trust13, trust4chg, trust4) |>
   dplyr::arrange(study) |>
   dplyr::select(study, sample, n, `bunk - debunk [95% CI]`, p)
 
-si_kable_styled(trust_all, caption = "Treatment effect on trust in AI across all four studies. Studies 1-3 report the within-variant bunking-minus-debunking contrast in pre-to-post trust change; Study 4 reports the same pre-to-post change contrast (strict sample, models pooled) plus the registered contrast on the post-treatment trust item in both the strict (intention-to-treat) and compliant samples. The effect is small in Studies 1-3.")
+si_kable_styled(trust_all, caption = "Treatment effect on trust in AI across all four studies. Studies 1-3 report the within-variant bunking-minus-debunking contrast in pre-to-post trust change; Study 4 reports the same pre-to-post change contrast (strict sample, models pooled) plus the registered contrast on the post-treatment trust item in both the observed-outcome and compliant samples. The effect is small in Studies 1-3.")
 ```
 
 The perception contrasts appear by item for all four studies, with the strict
@@ -853,10 +965,10 @@ percep <- dplyr::bind_rows(percep13, percep4) |>
                 `n (strict)` = n_strict, `bunk - debunk, strict [95% CI]` = strict, `p` = p_strict,
                 `n (compliant)` = n_comp, `bunk - debunk, compliant [95% CI]` = comp, `p ` = p_comp)
 
-si_kable_styled(percep, caption = "Perception measures across all four studies: bunking-minus-debunking contrasts in perceived argument strength, provision of new information, collaborativeness, and impartiality. All four studies report both the strict (intention-to-treat) and compliant samples; Studies 1-3 use the pre-to-post analytic sample and its compliant subset, and Study 4 uses the strict and compliant post-treatment contrasts.")
+si_kable_styled(percep, caption = "Perception measures across all four studies: bunking-minus-debunking contrasts in perceived argument strength, provision of new information, collaborativeness, and impartiality. All four studies report both the observed-outcome and compliant samples; Studies 1-3 use the pre-to-post analytic sample and its compliant subset, and Study 4 uses the strict and compliant post-treatment contrasts.")
 ```
 
-```{r ra-secondary-fig, fig.cap="Bunking-minus-debunking contrasts on the perception measures (argument strength, new information, collaborativeness, impartiality) across all four studies, with 95 percent confidence intervals. Studies 1-3 are shown by GPT-4o variant and Study 4 by individual frontier model (no pooling), each on BOTH the strict (intention-to-treat) and compliant samples (solid points/lines = Strict; hollow points/dashed lines = Compliant)."}
+```{r ra-secondary-fig, fig.cap="Bunking-minus-debunking contrasts on the perception measures (argument strength, new information, collaborativeness, impartiality) across all four studies, with 95 percent confidence intervals. Studies 1-3 are shown by GPT-4o variant and Study 4 by individual frontier model (no pooling), each on BOTH the observed-outcome and compliant samples (solid points/lines = Strict; hollow points/dashed lines = Compliant)."}
 fig_secondary()
 ```
 
@@ -880,7 +992,7 @@ pbm <- all_numbers |>
   dplyr::select(Model, Item,
                 `n (strict)` = n_strict, `bunk - debunk, strict [95% CI]` = ci_strict, `p` = p_strict,
                 `n (compliant)` = n_comp, `bunk - debunk, compliant [95% CI]` = ci_comp, `p ` = p_comp)
-si_kable_styled(pbm, caption = "Study 4 perception measures by model: bunking-minus-debunking contrast on each item (raw response scale, HC3), reported on both the strict (intention-to-treat) and compliant samples. Positive = rated higher under bunking.", digits = 2)
+si_kable_styled(pbm, caption = "Study 4 perception measures by model: bunking-minus-debunking contrast on each item (raw response scale, HC3), reported on both the observed-outcome and compliant samples. Positive = rated higher under bunking.", digits = 2)
 ```
 
 ### Pre-Treatment AI-Study Experience (Study 4)
@@ -932,7 +1044,7 @@ db4 <- all_numbers |>
   dplyr::filter(section == "S4 + pooled", block == "debrief_shift",
                 term == "post_to_debrief_change") |>
   dplyr::mutate(Sample = dplyr::recode(sample,
-                  strict_n1272 = "Strict (ITT)", compliant_n1073 = "Compliant"),
+                  strict_n1272 = "Observed outcomes", compliant_n1073 = "Compliant"),
                 `Shift [95% CI]` = fmt_ci(estimate, conf_low, conf_high, 2),
                 p = fmt_p(p_value)) |>
   dplyr::select(Sample, Model = model, Direction = direction, n,
@@ -964,9 +1076,9 @@ dbt <- dplyr::full_join(dbt_s, dbt_c, by = c("direction", "term")) |>
   dplyr::select(Direction = direction, Timepoint,
                 `n (strict)` = n_s, `strict [95% CI]` = strict,
                 `n (compliant)` = n_c, `compliant [95% CI]` = comp)
-si_kable_styled(dbt, caption = "Study 4 mean belief at pre-treatment, post-treatment, and post-debrief, by direction, on the strict (intention-to-treat) and compliant samples.", digits = 2)
+si_kable_styled(dbt, caption = "Study 4 mean belief at pre-treatment, post-treatment, and post-debrief, by direction, on the observed-outcome and compliant samples.", digits = 2)
 ```
 
-```{r rb-fig-debrief-traj, fig.cap="Post-conversation to post-debrief belief shift by study and model, both arms. For Study 4 both the strict (intention-to-treat) and compliant samples are shown (solid points/lines = Strict (ITT); hollow points/dashed lines = Compliant); Studies 1-3 have a single analytic sample."}
+```{r rb-fig-debrief-traj, fig.cap="Post-conversation to post-debrief belief shift by study and model, both arms. For Study 4 both the observed-outcome and compliant samples are shown (solid points/lines = Observed outcomes; hollow points/dashed lines = Compliant); Studies 1-3 have a single analytic sample."}
 fig_debrief_trajectory()
 ```

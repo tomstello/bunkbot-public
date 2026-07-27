@@ -275,7 +275,7 @@ if (!is.na(ANCHOR_WEIGHTED_STRICT)) {
 
 # ===================== 3b. registered (AsPredicted v3) specification ==========
 # The registered model is an UNADJUSTED aligned change-score OLS with
-# direction x model and robust SEs, fit ITT (no compliance filter, no baseline
+# direction x model and robust SEs, fit on all observed outcomes (no compliance filter, no baseline
 # covariate): aligned_change ~ persuasion_direction * model_type. Emitted in
 # full so the manuscript can report the registered specification verbatim;
 # the baseline-adjusted models in section 3 are a disclosed precision
@@ -299,7 +299,7 @@ for (i in seq_len(nrow(aligned_outcomes))) {
       transmute(term, estimate, se = std.error, conf_low = conf.low,
                 conf_high = conf.high, statistic, p_value = p.value,
                 n = nobs(fit_reg),
-                note = "registered v3 spec: lm(aligned ~ direction*model), HC3, ITT strict, no baseline covariate; reference = bunk, Claude"),
+                note = "registered v3 spec: lm(aligned ~ direction*model), HC3, observed-outcome strict sample, no baseline covariate; reference = bunk, Claude"),
     block = "prereg_registered_coefs", sample = "strict_n1272", outcome = oc
   ))
 
@@ -910,19 +910,25 @@ add_rows(std_rows(
   block = "attrition_tests", sample = "strict_n1272"
 ))
 
-# Diagnosis of conversation-stage losses via the client-side partial-chat log
-# (__js_chatPartialData1), which records chat content even for incomplete
-# sessions: distinguishes never-started/failed chats from mid-chat dropout.
-attr_lost <- attrition_pool %>%
-  filter(!completed) %>%
-  mutate(
-    partial_len = nchar(coalesce(`__js_chatPartialData1`, "")),
-    status = case_when(
-      chat_ok ~ "chat_saved_missing_outcomes",
-      partial_len > 20 ~ "partial_chat_then_lost",
-      TRUE ~ "no_chat_content"
-    )
-  )
+# Diagnosis of conversation-stage losses via the client-side partial-chat log.
+# Qualtrics stores one JSON state in 19,000-character chunks; the shared parser
+# joins those chunks and excludes the hidden pre-chat `user` seed from the count
+# of turns typed in the visible interface. An absent successful callback is kept
+# causally agnostic: it can reflect transition dropout or technical non-delivery.
+attr_lost <- attrition_pool %>% filter(!completed)
+.ps_names <- names(parse_partial_chat_state(""))
+.ps <- t(vapply(
+  attr_lost[["__js_chatPartialData1"]], parse_partial_chat_state,
+  integer(length(.ps_names))
+))
+attr_lost <- bind_cols(attr_lost, as.data.frame(.ps)) %>%
+  mutate(status = case_when(
+    chat_ok | next_section == 1L ~ "chat_completed_outcomes_missing",
+    initial_ai == 1L & chat_user == 1L ~ "interactive_chat_then_lost",
+    initial_ai == 1L ~ "initial_ai_no_user",
+    chat_user == 1L ~ "user_no_initial_ai",
+    TRUE ~ "no_successful_callback"
+  ))
 add_rows(std_rows(
   attr_lost %>% count(status) %>% transmute(term = status, n, estimate = n),
   block = "attrition_chat_diagnosis", sample = "strict_n1272"
@@ -933,10 +939,10 @@ add_rows(std_rows(
   block = "attrition_chat_diagnosis_by_model", sample = "strict_n1272"
 ))
 add_rows(std_rows(
-  attr_lost %>% filter(status == "no_chat_content") %>%
+  attr_lost %>% filter(status == "no_successful_callback") %>%
     count(model_pooled, direction) %>%
     transmute(model = as.character(model_pooled), direction = as.character(direction),
-              term = "no_chat_content", n, estimate = n),
+              term = "no_successful_callback", n, estimate = n),
   block = "attrition_chat_diagnosis_cells", sample = "strict_n1272"
 ))
 

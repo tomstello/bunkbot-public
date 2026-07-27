@@ -16,6 +16,7 @@ for author eyeball).
 from __future__ import annotations
 
 import csv
+import argparse
 import json
 from pathlib import Path
 
@@ -42,11 +43,22 @@ REVIEW = WORK_DIR / "canonical_claim_review.csv"
 
 
 def main() -> None:
-    orient = {r["ResponseId"]: r for r in csv.DictReader(open(ORIENT))}
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--inputs", default=str(IN_PATH))
+    ap.add_argument("--orientation", default=str(ORIENT))
+    ap.add_argument("--out", default=str(OUT_PATH))
+    ap.add_argument("--review", default=str(REVIEW))
+    args = ap.parse_args()
+    in_path, orient_path = Path(args.inputs), Path(args.orientation)
+    out_path, review_path = Path(args.out), Path(args.review)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    review_path.parent.mkdir(parents=True, exist_ok=True)
+
+    orient = {r["ResponseId"]: r for r in csv.DictReader(open(orient_path))}
     n = {"affirms": 0, "replaced": 0, "missing": 0}
     review_rows = []
-    with open(OUT_PATH, "w") as out:
-        for line in open(IN_PATH):
+    with open(out_path, "w") as out:
+        for line in open(in_path):
             it = json.loads(line)
             o = orient.get(it["ResponseId"])
             if o is None:
@@ -82,15 +94,14 @@ def main() -> None:
                 "v1_score": it["v1_score"],
             }
             out.write(json.dumps(rec, ensure_ascii=False) + "\n")
-    REVIEW.parent.mkdir(parents=True, exist_ok=True)
-    with open(REVIEW, "w", newline="") as f:
+    with open(review_path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(review_rows[0].keys()) if review_rows else
                            ["ResponseId"])
         w.writeheader()
         w.writerows(review_rows)
     print(f"items written: {n['affirms'] + n['replaced'] + n['missing']} "
           f"(affirms {n['affirms']}, replaced {n['replaced']}, missing-orientation {n['missing']})")
-    print(f"review file ({len(review_rows)} participants) -> {REVIEW}")
+    print(f"review file ({len(review_rows)} participants) -> {review_path}")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # ext_effect_sizes.R ---------------------------------------------------------------------
 # Standardized within-condition EFFECT SIZES for every study x condition cell, on BOTH the
-# strict (ITT) and compliant samples of all four studies. For each cell we report, on the
+# observed-outcome and compliant samples of all four studies. For each cell we report, on the
 # complete pre+post rows:
 #   n_cell, pre_mean, pre_sd, post_mean, post_sd (raw reverse-coded 0-100 belief scale),
 #   prepost_r = cor(pre, post), mean_change = mean(direction-ALIGNED change),
@@ -136,7 +136,7 @@ compute_effect_sizes <- function(core_objects) {
                             pre = pre, post = post, aligned = aligned,
                             compliant = base$compliant)
     note_s <- "Raw reverse-coded 0-100 belief scale (higher=more belief); aligned change = post-pre with debunking sign-flipped. d_z = mean/sd of aligned change."
-    # strict (ITT) = full analytic sample
+    # strict = full observed-outcome analytic sample
     out[[length(out) + 1]] <- .es_frame_rows(frame, "strict", note_s)
     # compliant subsample
     comp <- frame[.es_truthy(frame$compliant), , drop = FALSE]

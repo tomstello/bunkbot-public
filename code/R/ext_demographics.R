@@ -1,7 +1,7 @@
 # ext_demographics.R ---------------------------------------------------------------------
 # Sample-composition / demographics descriptives that document randomization balance. For
 # every study (S1, S2, S3, and Study 4) crossed with condition (Bunking / Debunking /
-# Overall) and crossed with sample (strict ITT / compliant), this reports the cell n, age
+# Overall) and crossed with sample (observed outcomes / compliant), this reports the cell n, age
 # mean & SD, percent female / male, mean education (1-8 scale), and a party/ideology
 # summary. Because random assignment to arm is the experimental manipulation, these
 # descriptives should be near-identical across Bunking and Debunking within each study; the

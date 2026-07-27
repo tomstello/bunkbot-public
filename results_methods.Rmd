@@ -3,6 +3,13 @@ title: "Bunkbot — reproducible Results & Methods"
 subtitle: "Every reported statistic recomputed live from the raw data, with the analysis code, full model output, and assumption checks exposed"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output:
+  bookdown::pdf_document2:
+    toc: true
+    toc_depth: 4
+    number_sections: true
+    latex_engine: xelatex
+    fig_caption: true
+    keep_tex: true
   bookdown::html_document2:
     toc: true
     toc_depth: 4
@@ -10,6 +17,18 @@ output:
     number_sections: true
     df_print: kable
     code_folding: show
+fontsize: 10pt
+geometry: margin=0.72in
+header-includes:
+  - \usepackage{hyperref}
+  - \usepackage{url}
+  - \usepackage{booktabs}
+  - \usepackage{longtable}
+  - \usepackage{pdflscape}
+  - \setlength{\emergencystretch}{3em}
+  - \setlength{\tabcolsep}{3pt}
+  - \renewcommand{\arraystretch}{1.08}
+  - \AtBeginEnvironment{longtable}{\setlength{\LTleft}{0pt}\setlength{\LTright}{0pt}\setlength{\LTcapwidth}{\linewidth}}
 ---
 
 ```{r setup, include=FALSE}
@@ -25,8 +44,38 @@ suppressPackageStartupMessages({
 source(file.path(REPO_ROOT, "code", "bunkbot_helpers.R"))   # engine: build_s1s3 + inference helpers
 source(file.path(REPO_ROOT, "code", "R", "formatting.R"))   # fmt_num / fmt_p / fmt_ci
 
+# Keep the HTML document's ordinary knitr tables, but use the supplement's
+# width-aware, page-breaking tables in the PDF.
+kable <- function(...) {
+  if (knitr::is_latex_output()) si_kable_styled(...) else knitr::kable(...)
+}
+if (knitr::is_latex_output()) knitr::opts_chunk$set(out.width = "\\linewidth")
+if (knitr::is_latex_output()) {
+  # Wrap displayed source and console output after execution. The executable R
+  # expressions and the HTML rendering are untouched.
+  wrap_fixed_width <- function(lines, width = 92) {
+    unlist(lapply(lines, function(line) {
+      if (!nzchar(line)) return("")
+      strwrap(line, width = width, exdent = 2)
+    }), use.names = FALSE)
+  }
+  source_hook <- knitr::knit_hooks$get("source")
+  output_hook <- knitr::knit_hooks$get("output")
+  knitr::knit_hooks$set(
+    source = function(x, options) source_hook(wrap_fixed_width(x), options),
+    output = function(x, options) output_hook(wrap_fixed_width(x), options)
+  )
+}
+
 paths <- pkg_paths(REPO_ROOT)
 s13   <- build_s1s3(paths, duration_filter = FALSE)          # canonical no-duration sample (1092/814/818)
+# The Methods child reads the same numerical cache as the SI for attrition
+# quantities. Build it API-free from the shipped data when a fresh checkout has
+# no cache yet (as in a new Code Ocean capsule).
+source(file.path(REPO_ROOT, "code", "R", "build_all_numbers.R"))
+.numbers_cache <- load_or_build_all_numbers(REPO_ROOT)
+ALL_NUMBERS <- .numbers_cache$all_numbers
+stopifnot(is.data.frame(ALL_NUMBERS), nrow(ALL_NUMBERS) > 0)
 
 # ---- inline formatters (en-dash minus; consistent rounding) ----------------
 mn  <- function(x) sub("-", "−", formatC(as.numeric(x), format = "f", digits = 1))
@@ -191,8 +240,8 @@ ge40 <- c(bunk = mean(cb >= 40), debunk = mean(cd >= 40)); ge40
 ```
 
 The full distributions differed (Kolmogorov–Smirnov *D* = `r mn2(ks_s1$statistic)`, `r P(ks_s1$p.value)`):
-debunking induced a ≥40-point shift in `r pct(ge40["debunk"],0)` of participants vs
-`r pct(ge40["bunk"],0)` for bunking (χ² = `r mn2(chi_s1$statistic)`, `r P(chi_s1$p.value)`).
+debunking induced a $\geq 40$-point shift in `r pct(ge40["debunk"],0)` of participants vs
+`r pct(ge40["bunk"],0)` for bunking ($\chi^2$ = `r mn2(chi_s1$statistic)`, `r P(chi_s1$p.value)`).
 
 ## Corrective debrief {-}
 
@@ -253,6 +302,9 @@ perc_items <- c(`Argument strength`="arg_strength_rc", `Provided new information
                 `Collaborativeness`="collaborative_rc", `Impartiality (unbiased)`="unbiased_rc")
 s1_perc <- bind_rows(lapply(perc_items, function(it) cohen_d2(s1, it)), .id = "outcome")
 kable(s1_perc, digits = 3, caption = "Study 1 perception judgments — recoded items, two-sample d.")
+```
+
+```{r s1-perceptions-hc3}
 # HC3 condition contrasts (full coefficient view), one model per item
 s1_perc_fits <- lapply(perc_items, function(it) {
   d <- s1 |> mutate(dir = factor(if_else(condition_factor=="Bunking","bunk","debunk"), levels=c("debunk","bunk")))

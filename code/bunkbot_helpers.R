@@ -33,6 +33,232 @@ suppressPackageStartupMessages({
 
 model_order_s4 <- c("Claude", "Gemini", "GPT-5.2", "Grok")
 
+# Parse the continuously saved Qualtrics partial-chat field. The field is a JSON
+# array of successive 19,000-character chunks of ONE stringified chat-state
+# object, so the chunks must be joined before the inner JSON is parsed. The
+# first two messages are normally the hidden system prompt and the participant's
+# pre-chat writing (stored as an initial `user` message); only later user roles
+# count as turns typed in the visible chat interface.
+parse_partial_chat_state <- function(cell) {
+  empty <- c(
+    parse_ok = 0L, has_partial = 0L, initial_ai = 0L, chat_user = 0L,
+    last_user_replied = 0L, next_section = 0L, n_chunks = 0L,
+    visible_user_n = 0L, assistant_n = 0L,
+    visible_user_words = 0L, assistant_words = 0L
+  )
+  if (length(cell) == 0L || is.na(cell) || !nzchar(trimws(as.character(cell)))) return(empty)
+
+  outer <- tryCatch(
+    jsonlite::fromJSON(as.character(cell), simplifyVector = FALSE),
+    error = function(e) NULL
+  )
+  if (is.null(outer)) return(empty)
+  chunks <- unlist(outer, recursive = FALSE, use.names = FALSE)
+  chunks <- as.character(chunks)
+  chunks <- chunks[!is.na(chunks)]
+  if (!length(chunks)) return(empty)
+
+  obj <- tryCatch(
+    jsonlite::fromJSON(paste0(chunks, collapse = ""), simplifyVector = FALSE),
+    error = function(e) NULL
+  )
+  if (is.character(obj) && length(obj) == 1L) {
+    obj <- tryCatch(jsonlite::fromJSON(obj, simplifyVector = FALSE), error = function(e) NULL)
+  }
+  if (!is.list(obj) || is.null(obj$messages)) return(empty)
+
+  messages <- obj$messages
+  if (!is.list(messages)) messages <- list()
+  role <- vapply(
+    messages,
+    function(m) if (is.null(m$role)) "" else as.character(m$role)[1],
+    character(1), USE.NAMES = FALSE
+  )
+  content <- vapply(
+    messages,
+    function(m) if (is.null(m$content)) "" else paste(as.character(m$content), collapse = ""),
+    character(1), USE.NAMES = FALSE
+  )
+  nonblank <- nzchar(trimws(content))
+
+  # The deployed main-chat state begins with exactly system + seeded user. Some
+  # callbacks update messageInfo after posting the messages array, so its counters
+  # can lag and are only a fallback when the role prefix is unavailable.
+  if (length(role) >= 2L && identical(role[1:2], c("system", "user"))) {
+    n_initial <- 2L
+  } else {
+    n_initial_raw <- if (is.null(obj$messageInfo) || is.null(obj$messageInfo$nInitialMessages)) {
+      NA_integer_
+    } else {
+      obj$messageInfo$nInitialMessages
+    }
+    n_initial <- suppressWarnings(as.integer(n_initial_raw)[1])
+    if (is.na(n_initial) || n_initial < 0L) n_initial <- 0L
+  }
+  idx <- seq_along(role)
+  user_idx <- idx[role == "user" & nonblank & idx > n_initial]
+  assistant_idx <- idx[role == "assistant" & nonblank]
+  word_count <- function(x) {
+    x <- trimws(as.character(x))
+    if (!nzchar(x)) return(0L)
+    as.integer(length(strsplit(x, "\\s+")[[1]]))
+  }
+
+  c(
+    parse_ok = 1L,
+    has_partial = 1L,
+    initial_ai = as.integer(length(assistant_idx) > 0L),
+    chat_user = as.integer(length(user_idx) > 0L),
+    last_user_replied = as.integer(
+      length(user_idx) > 0L && any(assistant_idx > max(user_idx))
+    ),
+    next_section = as.integer(isTRUE(obj$nextSection)),
+    n_chunks = as.integer(length(chunks)),
+    visible_user_n = as.integer(length(user_idx)),
+    assistant_n = as.integer(length(assistant_idx)),
+    visible_user_words = as.integer(sum(vapply(content[user_idx], word_count, integer(1)))),
+    assistant_words = as.integer(sum(vapply(content[assistant_idx], word_count, integer(1))))
+  )
+}
+
+# Reconstruct a saved Study-4 transcript from its successive Qualtrics chunks.
+parse_s4_complete_transcript <- function(chunks) {
+  chunks <- chunks[!is.na(chunks) & nzchar(chunks)]
+  if (!length(chunks)) return(NULL)
+  inner <- vapply(
+    chunks,
+    function(s) {
+      if (startsWith(s, "\"")) s <- substr(s, 2, nchar(s))
+      if (endsWith(s, "\"")) s <- substr(s, 1, nchar(s) - 1)
+      s
+    },
+    character(1), USE.NAMES = FALSE
+  )
+  joined <- paste0(inner, collapse = "")
+  joined <- gsub("\\\\\"", "\"", joined)
+  joined <- gsub("\\\\\\\\", "\\\\", joined)
+  parsed <- tryCatch(jsonlite::fromJSON(joined, simplifyVector = FALSE),
+                     error = function(e) NULL)
+  if (is.character(parsed) && length(parsed) == 1L) {
+    parsed <- tryCatch(jsonlite::fromJSON(parsed, simplifyVector = FALSE),
+                       error = function(e) NULL)
+  }
+  if (is.list(parsed) && !is.null(parsed$messages)) parsed$messages else NULL
+}
+
+summarize_s4_messages <- function(messages) {
+  empty <- c(
+    chat_visible_user_n = NA_integer_, chat_assistant_n = NA_integer_,
+    chat_visible_user_words = NA_integer_, chat_assistant_words = NA_integer_
+  )
+  if (is.null(messages) || !is.list(messages)) return(empty)
+  role <- vapply(messages, function(m) {
+    if (is.null(m$role)) "" else as.character(m$role)[1]
+  }, character(1), USE.NAMES = FALSE)
+  content <- vapply(messages, function(m) {
+    if (is.null(m$content)) "" else paste(as.character(m$content), collapse = "")
+  }, character(1), USE.NAMES = FALSE)
+  nonblank <- nzchar(trimws(content))
+  n_initial <- if (length(role) >= 2L && identical(role[1:2], c("system", "user"))) 2L else 0L
+  idx <- seq_along(role)
+  user_idx <- idx[role == "user" & nonblank & idx > n_initial]
+  assistant_idx <- idx[role == "assistant" & nonblank]
+  word_count <- function(x) {
+    x <- trimws(as.character(x))
+    if (!nzchar(x)) return(0L)
+    as.integer(length(strsplit(x, "\\s+")[[1]]))
+  }
+  c(
+    chat_visible_user_n = as.integer(length(user_idx)),
+    chat_assistant_n = as.integer(length(assistant_idx)),
+    chat_visible_user_words = as.integer(sum(vapply(content[user_idx], word_count, integer(1)))),
+    chat_assistant_words = as.integer(sum(vapply(content[assistant_idx], word_count, integer(1))))
+  )
+}
+
+# Eligible Study-4 assignment cohort used to define attrition denominators.
+# Every predicate is measured before the experimental
+# chatbot response. Post-treatment completion and transcript fields are
+# deliberately not used here.
+build_s4_assignment_pool <- function(s4_raw) {
+  s4_raw |>
+    dplyr::filter(
+      .data$attention_pass, .data$berry_pass, .data$dedup_pass,
+      .data$condition_assigned, .data$model_assigned,
+      .data$pre_belief_present, .data$pre_post_present,
+      .data$equivocal_pass, !.data$invalid_claim,
+      nonempty(.data$direction), .data$belief_window_pass
+    )
+}
+
+# Add stored delivery state and harmonized chat exposure to the eligible Study-4
+# assignment pool. Complete records use the saved main transcript; incomplete
+# records use the continuously saved partial-chat state.
+prepare_s4_delivery_pool <- function(s4_raw) {
+  pool <- build_s4_assignment_pool(s4_raw) |>
+    dplyr::mutate(
+      model = model_pooled_label(.data$modelName),
+      completed = .data$post_outcomes_present,
+      chat_ok = dplyr::coalesce(.data$chat_saved, FALSE)
+    )
+
+  state_names <- names(parse_partial_chat_state(""))
+  partial <- matrix(0L, nrow = nrow(pool), ncol = length(state_names),
+                    dimnames = list(NULL, state_names))
+  incomplete <- which(!pool$completed)
+  if (length(incomplete)) {
+    partial[incomplete, ] <- t(vapply(
+      pool[["__js_chatPartialData1"]][incomplete], parse_partial_chat_state,
+      integer(length(state_names))
+    ))
+  }
+  pool <- dplyr::bind_cols(pool, as.data.frame(partial))
+
+  exposure_names <- names(summarize_s4_messages(NULL))
+  exposure <- matrix(NA_integer_, nrow = nrow(pool), ncol = length(exposure_names),
+                     dimnames = list(NULL, exposure_names))
+  complete <- which(pool$completed)
+  chat_cols <- intersect(paste0("chathistory0", 1:5), names(pool))
+  if (length(complete) && length(chat_cols)) {
+    exposure[complete, ] <- t(vapply(
+      complete,
+      function(i) summarize_s4_messages(parse_s4_complete_transcript(
+        as.character(unlist(pool[i, chat_cols], use.names = FALSE))
+      )),
+      integer(length(exposure_names))
+    ))
+  }
+  pool <- dplyr::bind_cols(pool, as.data.frame(exposure)) |>
+    dplyr::mutate(
+      chat_visible_user_n = dplyr::if_else(
+        .data$completed, .data$chat_visible_user_n, .data$visible_user_n
+      ),
+      chat_assistant_n = dplyr::if_else(
+        .data$completed, .data$chat_assistant_n, .data$assistant_n
+      ),
+      chat_visible_user_words = dplyr::if_else(
+        .data$completed, .data$chat_visible_user_words, .data$visible_user_words
+      ),
+      chat_assistant_words = dplyr::if_else(
+        .data$completed, .data$chat_assistant_words, .data$assistant_words
+      ),
+      loss_class = dplyr::case_when(
+        .data$completed ~ "completed",
+        .data$chat_ok | .data$next_section == 1L ~ "chat_completed_outcomes_missing",
+        .data$initial_ai == 1L & .data$chat_user == 1L ~ "interactive_chat_then_lost",
+        .data$initial_ai == 1L ~ "initial_ai_no_user",
+        .data$chat_user == 1L ~ "user_no_initial_ai",
+        TRUE ~ "no_successful_callback"
+      )
+    )
+  pool
+}
+
+build_s4_chat_started_pool <- function(s4_raw) {
+  prepare_s4_delivery_pool(s4_raw) |>
+    dplyr::filter(.data$completed | .data$initial_ai == 1L)
+}
+
 # ---- Package path resolver --------------------------------------------------
 # `root` = the replication package root (parent of code/). All inputs live under
 # data/raw_qualtrics/ + data/processed_s1s3/ (raw + analysis-ready study data) and
@@ -56,6 +282,9 @@ pkg_paths <- function(root) {
     s4_cell_estimates     = ac("sharing_and_stance", "study4_sharing_cell_estimates.csv"),
     s4_orientation        = ac("sharing_and_stance", "study4_restatement_orientation.csv"),
     s4_stance_v2          = ac("sharing_and_stance", "study4_stance_classifications.csv"),
+    s4_orientation_gap    = ac("sharing_and_stance", "study4_chat_started_orientation_gap.csv"),
+    s4_stance_v2_gap      = ac("sharing_and_stance", "study4_chat_started_pre_stance_gap.csv"),
+    s4_gap_manifest       = ac("sharing_and_stance", "study4_chat_started_gap_manifest.json"),
     s4_master             = ac("claim_datasets", "study4_master_analysis_dataset.csv"),
     claim_role            = ac("claim_datasets", "claim_role_portfolio_all_studies.csv"),
     pooled_accuracy       = ac("claim_datasets", "claim_accuracy_pooled_s2_s4.csv"),

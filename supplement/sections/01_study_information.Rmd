@@ -121,7 +121,7 @@ magnitude essentially intact.
 **Exploratory analyses.** Beyond the registered tests above, the analyses in this
 supplement are exploratory. This includes **all of Study 3**, which was not
 preregistered; the compliant-subset (manipulation-delivered) estimates reported
-alongside the registered intention-to-treat contrasts; the Study 3
+alongside the registered observed-outcome contrasts; the Study 3
 truth-constraint counterfactual; the pre-treatment
 moderator, topic-heterogeneity, claim-veracity, and durability
 analyses; and the cross-study pooled symmetry test. These are labeled as

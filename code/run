@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Code Ocean executes this file from /code. The same script can be run locally;
+# set RESULTS_DIR to override the local fallback destination.
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
+
+if [[ -z "${RESULTS_DIR:-}" ]]; then
+  if [[ -d /results && -w /results ]]; then
+    RESULTS_DIR=/results
+  else
+    RESULTS_DIR="${REPO_ROOT}/code_ocean_results"
+  fi
+fi
+
+case "${RESULTS_DIR}" in
+  ""|/|/root|/root/capsule|/code|/data|"${REPO_ROOT}")
+    printf 'Refusing unsafe RESULTS_DIR: %s\n' "${RESULTS_DIR}" >&2
+    exit 2
+    ;;
+esac
+
+mkdir -p "${REPO_ROOT}/output" "${RESULTS_DIR}"
+find "${REPO_ROOT}/output" -type f ! -name '.gitkeep' -delete
+find "${RESULTS_DIR}" -mindepth 1 -delete
+
+cd "${REPO_ROOT}"
+
+# One API-free live recompute. Subsequent document and figure renders reuse the
+# guarded cache produced here.
+Rscript -e "source('code/R/build_all_numbers.R'); load_or_build_all_numbers('.')"
+
+Rscript -e "rmarkdown::render('results_methods.Rmd', output_format = 'all', output_dir = 'output')"
+Rscript -e "rmarkdown::render('supplement/Bunkbot_SI.Rmd', output_format = 'all', output_dir = 'output')"
+Rscript figures/manuscript/make_figures.R
+
+find output -maxdepth 1 -type f ! -name '_all_numbers.rds' -exec cp -p {} "${RESULTS_DIR}/" \;
+mkdir -p "${RESULTS_DIR}/manuscript_figures"
+find figures/manuscript -maxdepth 1 -type f \( -name '*.pdf' -o -name '*.png' \) \
+  -exec cp -p {} "${RESULTS_DIR}/manuscript_figures/" \;
+
+{
+  printf 'Bunkbot Code Ocean reproducible run\n'
+  printf 'UTC completion time: '
+  date -u '+%Y-%m-%dT%H:%M:%SZ'
+  printf 'Git revision: '
+  git rev-parse HEAD 2>/dev/null || printf 'unavailable\n'
+  Rscript -e "cat('R version: ', R.version.string, '\n', sep = '')"
+  printf '\nResult checksums (SHA-256):\n'
+  (
+    cd "${RESULTS_DIR}"
+    find . -type f ! -name 'REPRODUCTION_MANIFEST.txt' -exec shasum -a 256 {} \; | sort
+  )
+} > "${RESULTS_DIR}/REPRODUCTION_MANIFEST.txt"
+
+printf 'Reproducible run complete. Results are in %s\n' "${RESULTS_DIR}"

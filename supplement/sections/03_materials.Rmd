@@ -131,7 +131,7 @@ $25 < \text{pre-belief} < 75$.
 ## Post-conversation measures
 
 Immediately after the AI conversation, participants re-rated belief on the same
-0--100 slider (`belief_rating_post`), re-completed the GCBS and Trust-in-AI items,
+0--100 slider. The released variable is `belief_rating_post`. Participants then re-completed the GCBS and Trust-in-AI items
 and rated four perceptions of the AI interlocutor (secondary perception measures):
 **argument strength** (`arg_strength`, 5-point weak--strong), **new information**
 (`new_info`, 10-point), **perceived bias** (`unbiased`, 5-point

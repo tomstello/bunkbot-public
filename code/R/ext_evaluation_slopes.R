@@ -42,7 +42,7 @@
 #     in the note (p = max of the two one-sided HC3 t-tests).
 #
 # POOLED S1-4 ROWS: the identical
-# two-slope spec re-estimated on Studies 1-4 combined. Study 4 enters via the strict ITT
+# two-slope spec re-estimated on Studies 1-4 combined. Study 4 enters via the strict observed-outcome
 # frame (core_objects$s4$s4_with_compliance, n=1272), same >=1-aligned-claim eligibility;
 # S4 falsehood share comes from the same read_claim_labels() call (claim_role_labels_s2s4.csv);
 # S4 items are the SAME instrument the S1-3 recodes were built to match (ArgStrength 1-5,
@@ -69,9 +69,9 @@
 # paper's established COMPLIANT subsets, where assigned direction = de facto direction:
 #   * S1-3: evaluator_label == 1 & reverse_evaluator_label == 1 (the APE both-labels filter);
 #   * S4:   core_objects$s4$s4_compliant (n = 1073).
-# Compliant frames are strict row-subsets of the ITT frames above: every variable (including
-# the composite, whose items stay z-scored on the parent ITT frame) is IDENTICAL, so any
-# ITT-vs-compliant slope difference is pure sample composition, not variable redefinition
+# Compliant frames are strict row-subsets of the observed-outcome frames above: every variable (including
+# the composite, whose items stay z-scored on the parent observed-outcome frame) is IDENTICAL, so any
+# observed-outcome-vs-compliant slope difference is pure sample composition, not variable redefinition
 # (.es_fit re-z-scores outcome and predictor within each estimation sample regardless).
 # Same >=1-aligned-claim eligibility, FE, controls, outcomes, terms (incl. the bunking-arm
 # *_raw sensitivity rows), and TOST notes.
@@ -105,7 +105,7 @@
 # flagged DESCRIPTIVE in the note (falsehood share is post-treatment w.r.t. arm).
 #
 # ENTRY POINT: compute_evaluation_slopes(core_objects) -> tibble (canonical 17-col schema).
-#   section "S1-3"; block "evaluation_slopes"; sample = "aligned_ge1" (ITT frames, the
+#   section "S1-3"; block "evaluation_slopes"; sample = "aligned_ge1" (observed-outcome frames, the
 #   original rows) or "compliant" (compliant frames).
 #   model = "S1-3 pooled" / "S1-4 pooled"; direction = "Bunking" (primary) / "Debunking"
 #   (or "Bunking - Debunking" for the arm-contrast terms);
@@ -222,7 +222,7 @@ compute_evaluation_slopes <- function(core_objects) {
                                        zfull(d13$collaborative_rc), zfull(d13$unbiased_rc)),
                                  na.rm = FALSE)
 
-  # -- S4 strict ITT frame + pooled S1-4 frame ---------------------------------------------
+  # -- S4 strict observed-outcome frame + pooled S1-4 frame --------------------------------
   # 7 study/model strata (Jailbroken/Standard/Truth-Constrained + Claude/Gemini/GPT-5.2/Grok);
   # S4 items are the reference instrument for the S1-3 recodes, so they enter unrecoded except
   # for the shared new_info / 69..73 maps. The pooled composite is re-z-scored on the pooled
@@ -261,7 +261,7 @@ compute_evaluation_slopes <- function(core_objects) {
                                         zfull(pool$collaborative_rc), zfull(pool$unbiased_rc)),
                                   na.rm = FALSE)
 
-  # Compliant frames = strict row-subsets of the ITT frames (variables, incl. the parent-frame
+  # Compliant frames = strict row-subsets of the observed-outcome frames (variables, incl. the parent-frame
   # composite, untouched); see header. S1-3 = APE both-labels; S4 = the s4_compliant frame.
   d13_c  <- d13[!is.na(d13$evaluator_label) & d13$evaluator_label == 1 &
                   !is.na(d13$reverse_evaluator_label) & d13$reverse_evaluator_label == 1, ,
