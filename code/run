@@ -1,10 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Code Ocean executes this file from /code. The same script can be run locally;
-# set RESULTS_DIR to override the local fallback destination.
+# Code Ocean exposes only /code, /data, /results, and /scratch during a
+# Reproducible Run; files shown under "Other Files" in the capsule UI are not
+# mounted. The repository therefore ships document/figure sources again under
+# code/code_ocean_sources/. On Code Ocean we assemble the ordinary repository
+# layout in /scratch so the same R Markdown and analysis paths work unchanged.
+#
+# The same script can be run locally; set RESULTS_DIR to override the local
+# fallback destination.
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-REPO_ROOT="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
+
+if [[ "${SCRIPT_DIR}" == "/code" && -d /data && -d /scratch ]]; then
+  REPO_ROOT=/scratch/bunkbot-reproduction
+  SOURCE_BUNDLE="${SCRIPT_DIR}/code_ocean_sources"
+  if [[ ! -f "${SOURCE_BUNDLE}/results_methods.Rmd" ||
+        ! -f "${SOURCE_BUNDLE}/supplement/Bunkbot_SI.Rmd" ||
+        ! -f "${SOURCE_BUNDLE}/figures/manuscript/make_figures.R" ]]; then
+    printf 'Code Ocean source bundle is incomplete: %s\n' "${SOURCE_BUNDLE}" >&2
+    exit 2
+  fi
+  rm -rf "${REPO_ROOT}"
+  mkdir -p "${REPO_ROOT}"
+  ln -s /code "${REPO_ROOT}/code"
+  ln -s /data "${REPO_ROOT}/data"
+  cp -R "${SOURCE_BUNDLE}/supplement" "${REPO_ROOT}/supplement"
+  cp -R "${SOURCE_BUNDLE}/figures" "${REPO_ROOT}/figures"
+  cp "${SOURCE_BUNDLE}/results_methods.Rmd" "${REPO_ROOT}/results_methods.Rmd"
+else
+  REPO_ROOT="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
+fi
 
 if [[ -z "${RESULTS_DIR:-}" ]]; then
   if [[ -d /results && -w /results ]]; then

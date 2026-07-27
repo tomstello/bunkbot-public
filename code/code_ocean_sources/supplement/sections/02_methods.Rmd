@@ -1,0 +1,638 @@
+# Methods
+
+## Common Experimental Paradigm and Direction-Aligned Coding
+
+All four studies share one paradigm. A participant completes a baseline survey,
+describes in free text a conspiracy theory about which they are genuinely
+uncertain, and rates their belief in an AI-generated restatement of that
+conspiracy on a 0--100 scale. They are then randomly assigned to a multi-turn
+conversation in which the AI is instructed to argue either *for* the conspiracy
+("bunking") or *against* it ("debunking"), and they rate belief in the same
+restatement again afterward. Random assignment governs only the direction of the
+AI's argument; the focal topic itself is participant-selected, so each
+conversation is personally relevant while remaining experimentally manipulated.
+
+Two coding conventions make outcomes comparable across the bunking and
+debunking arms. First, the belief scale is oriented so that higher values always
+indicate greater conspiracy belief, applying a restatement-orientation
+correction (`_rc`). The correction is needed because the conspiracy restatement
+shown to each participant is LLM-generated, and a small minority of restatements
+were phrased as *denials* of the conspiracy rather than affirmations; for those
+items a high rating meant *low* conspiracy belief, the reverse of the default
+orientation. The belief item is a single 0--100 slider anchored at 0
+("Definitely false"), 50 ("Uncertain"), and 100 ("Definitely true"); the
+correction rule is $b_{rc} = 100 - b$ for the subset of restatements phrased
+against the focal proposition and $b_{rc} = b$ otherwise. This reversal was rare.
+Second,
+belief change is *direction-aligned*: it is signed so that
+positive values denote movement toward the position the AI was assigned to
+advocate. Concretely, for a post-minus-pre difference $\Delta$ on the corrected
+scale,
+
+\[
+\text{aligned change} =
+\begin{cases}
++\Delta & \text{bunking (AI argues for the conspiracy)}\\
+-\Delta & \text{debunking (AI argues against the conspiracy)}.
+\end{cases}
+\]
+
+The same
+alignment rule is applied to every secondary outcome that has a natural
+direction (stance scores, weighted sharing, posting willingness), so that
+"aligned" always means "toward the assigned AI position."
+
+## Sample construction and screening
+
+Each study filters respondents to those who supplied a usable focal conspiracy
+and whose baseline belief reflected genuine uncertainty rather than a settled
+position. Because the conversational partner is itself an LLM, the screening
+process serves two purposes at once: it enforces the substantive inclusion
+criteria (a genuinely equivocal focal conspiracy, a baseline belief away from the
+scale's floor and ceiling) and it removes inattentive humans and possible
+automated respondents through a set of attention, instructed-response, and
+bot-baiting items administered as ordered survey gates. Two components are common
+to all four studies.
+
+The first is an **equivocality classifier**, implemented as an in-survey
+OpenAI Chat Completions call to `gpt-4o-2024-08-06`. The classifier receives two
+fields: (Q1) the participant's free-text description of a conspiracy theory they
+were asked to be genuinely unsure about (one they could "see possible evidence
+for both sides" of), and (Q2) the participant's reasons for partial belief and
+partial skepticism. From these it returns exactly one of three labels --- `TRUE`
+(uncertainty or ambivalence about a conspiracy or closely related idea is at
+least plausible, with borderline cases such as cryptids or paranormal cover-ups
+counted as `TRUE`), `FALSE` (the participant expresses firm belief or firm
+rejection with no sign of uncertainty, or states they hold no such belief /
+misread the prompt), or `INVALID` (responses are nonsensical, inattentive,
+off-topic, or appear auto-generated/robotic). The prompt instructs the model to
+*default to* `TRUE` when ambivalence is unclear (deliberately favoring false
+positives at this stage), and on a parse failure the call is retried once before
+the response is treated as not equivocal. Only `TRUE` cases proceed. A separate
+`gpt-4o-2024-08-06` call then generates the one-sentence **conspiracy
+restatement** (`con_restatement`) shown back to the participant and rated for
+baseline belief; this same restatement string is later replayed verbatim in the
+counterfactual analysis. The second is the **25--75 baseline-belief window**: the corrected
+baseline rating must fall strictly inside $25 < \text{belief} < 75$, excluding
+participants who began near the floor or ceiling and for whom movement in the
+assigned direction would be mechanically constrained.
+
+Studies 1--3 are screened on the same logic as Study 4. In survey order, a
+respondent must: pass the **chatbot screener**
+(`response1`), a one-sentence open-ended task in which the participant is asked to
+"write a complete sentence describing something you'd change about the world" and
+an LLM grades the response for coherence, returning $-1$ on a pass and $0$ on a
+fail (a $0$ triggers `EndSurvey`); pass the
+**instructed-response attention check** (`nicks`; failing to select "Somewhat
+disagree" triggers `EndSurvey`); and supply a focal conspiracy the equivocality
+classifier rates `TRUE`. The classifier feeds two consecutive funnel stages,
+because its three-way label is screened in two steps: the first drops `INVALID`
+descriptions (nonsensical, off-topic, or robotic; `EndSurvey` after one retry) and
+the second drops `FALSE` descriptions (firm belief or firm rejection), leaving only
+the `TRUE` (equivocal) cases. Retained respondents must then fall inside the
+25--75 baseline-belief window and complete the conversation. Figure \@ref(fig:ra-funnel-s13) reports the
+cumulative funnel; the surviving analytic samples are
+`r fmt_n(nn("screening_counts", model="Jailbroken"))` (Jailbroken),
+`r fmt_n(nn("screening_counts", model="Standard"))` (Standard), and
+`r fmt_n(nn("screening_counts", model="Truth-Constrained"))` (Truth-Constrained).
+
+Four of these screens target inattentive humans and possible bots, and
+Table \@ref(tab:me-attention) records how many respondents each removed or flagged
+in Studies 1--3. The **coherence chatbot screener** and the
+**instructed-response "nicks" item** (registered key "nicks == 5") are hard
+`EndSurvey` gates: across Studies 1--3 they excluded
+`r fmt_n(nn("attention_checks", model="Jailbroken", term="respond_minus1_failed"))` /
+`r fmt_n(nn("attention_checks", model="Standard", term="respond_minus1_failed"))` /
+`r fmt_n(nn("attention_checks", model="Truth-Constrained", term="respond_minus1_failed"))`
+and a further
+`r fmt_n(nn("attention_checks", model="Jailbroken", term="nicks_failed"))` /
+`r fmt_n(nn("attention_checks", model="Standard", term="nicks_failed"))` /
+`r fmt_n(nn("attention_checks", model="Truth-Constrained", term="nicks_failed"))`
+respondents respectively. The **gender "favorite spice" trap** --- present only in
+Studies 2 and 3 --- is a question constructed so that a human reads it as a benign
+demographic item while an auto-completing LLM is liable to produce a telltale
+response; it flagged
+`r fmt_n(nn("attention_checks", model="Standard", term="gender_spice_trap_failed"))`
+and `r fmt_n(nn("attention_checks", model="Truth-Constrained", term="gender_spice_trap_failed"))`
+responses (Study 4 replaces it with an analogous berry/strawberry instruction
+item, step 2 of its funnel below). Finally, an explicit **"if you are an LLM"
+self-disclosure item** invites any automated respondent to identify itself;
+self-disclosures were rare in every study
+(`r fmt_n(nn("attention_checks", model="Jailbroken", term="llm_self_disclosure_flagged"))` /
+`r fmt_n(nn("attention_checks", model="Standard", term="llm_self_disclosure_flagged"))` /
+`r fmt_n(nn("attention_checks", model="Truth-Constrained", term="llm_self_disclosure_flagged"))`).
+
+```{r me-attention}
+.att_lab <- c(respond_minus1_failed = "Failed coherence chatbot screener",
+              nicks_failed = "Failed instructed-response (nicks)",
+              gender_spice_trap_failed = "Failed gender 'favorite spice' trap",
+              llm_self_disclosure_flagged = "Flagged on 'if you are an LLM' item")
+me_att <- ALL_NUMBERS |>
+  dplyr::filter(block == "attention_checks") |>
+  dplyr::mutate(Item = factor(.att_lab[term], levels = .att_lab),
+                model = factor(model, levels = c("Jailbroken", "Standard", "Truth-Constrained"))) |>
+  dplyr::transmute(Item, model, n_excluded = ifelse(is.na(n), "—", as.character(n))) |>
+  tidyr::pivot_wider(names_from = model, values_from = n_excluded) |>
+  dplyr::arrange(Item)
+si_kable_styled(me_att, caption = "Studies 1-3 attention and bot-detection items: respondents excluded or flagged by each item, by study. The coherence chatbot screener and instructed-response items are hard EndSurvey gates; the gender 'favorite spice' trap was administered only in Studies 2-3 (dash = not administered). The Study 4 attention and instruction screens appear in its inclusion funnel (Table \\@ref(tab:me-funnel-s4)).", digits = 0)
+```
+
+Study 4 applies the **same screening logic** as Studies 1--3 --- the chatbot
+screener, the instructed-response attention check, the equivocality classifier,
+and the 25--75 baseline-belief window --- so the substantive inclusion criteria are
+identical across all four studies. The only thing that distinguishes Study 4 is a
+handful of production bookkeeping gates that the raw-export reconstruction makes
+visible: a row must have its pre-conversation sharing measures present, carry an
+assigned LLM model, survive the registered duplicate-panel-ID (`rid`) exclusion. Table \@ref(tab:me-funnel-s4) reports the cumulative funnel; the strict
+analytic sample is
+`r fmt_n(nn("funnel", sample="strict_n1272", term="Post-conversation outcomes present"))`.
+The two adjacent classifier stages are distinct checks on different objects:
+"Valid/equivocal conspiracy classifier == TRUE" is the equivocality classifier
+accepting the participant's own free-text focal description as genuinely uncertain,
+whereas the next stage, "Restatement not flagged invalid," is a separate downstream
+validity filter on the LLM-generated one-sentence `con_restatement` string, so its
+small (~6-row) drop is restatements that this generated-text check rejected, not
+additional participant descriptions.
+The registered `rid` exclusion keeps only the first response per panel identifier:
+`r fmt_n(est("dedup_audit", term="duplicate_rid_ids_raw"))` panel ids appeared
+more than once among the raw rows (accounting for
+`r fmt_n(est("dedup_audit", term="duplicate_rid_extra_rows_any_stage"))` extra
+rows, mostly empty pre-conversation shells), but
+`r fmt_n(est("dedup_audit", term="duplicate_response_rows"))` of the duplicate
+rows carried post-conversation outcomes beyond their first occurrence and
+`r fmt_n(est("dedup_audit", term="excluded_solely_for_duplication"))` rows were
+excluded *solely* by this rule --- so deduplication leaves the strict $N$
+unchanged.
+
+```{r me-funnel-s4}
+me_funnel_s4 <- ALL_NUMBERS |>
+  dplyr::filter(block == "funnel", sample == "strict_n1272") |>
+  dplyr::select(stage = term, n_remaining = n)
+si_kable_styled(me_funnel_s4, caption = "Study 4 screening and inclusion funnel: entrant-level rows remaining after each cumulative screen. The substantive screens (chatbot screener, attention check, equivocality classifier, 25-75 baseline window) match Studies 1-3; the remaining rows are production and reconstruction bookkeeping. The strict analytic sample is N = 1,272.", digits = 0)
+```
+
+The final funnel step --- requiring post-conversation outcomes --- removes the
+participants who were assigned a model and reached the chat but did not finish.
+The continuously-saved partial-chat log (`__js_chatPartialData1`) records how far
+each such participant got, but it does not identify why an initial callback is
+absent. Qualtrics stored one chat-state object in successive 19,000-character
+chunks; these chunks are joined before parsing. The state begins with a hidden
+system prompt and the participant's earlier writing as an initial `user` message,
+neither of which is counted as a turn typed in the visible chat interface. We
+separate four mutually exclusive loss states: **no successful initial AI
+callback**, **initial AI response but no new participant turn**, **interactive
+chat followed by loss**, and **chat completed but outcomes missing**. The first
+state is causally ambiguous: it can reflect participant departure at the chatbot
+transition, failure of the iframe/client or initial model request, or departure
+while waiting. The per-model counts and the model-by-date evidence concerning the
+OpenRouter removal of the requested Gemini 3 Pro endpoint are reported in the
+Results attrition analysis (Table \@ref(tab:ra-attrition-split)).
+
+## Statistical conventions
+
+For Studies 1--3 the estimand is the baseline-adjusted condition contrast:
+direction-aligned change regressed on the condition factor and the baseline belief
+rating additively (an ANCOVA with no condition-by-baseline interaction), with HC3
+standard errors. This matches Study 2's registered ANCOVA; because direction is
+randomized the additive baseline term is a precision adjustment and the contrast
+equals the unadjusted bunking-minus-debunking magnitude. For
+Study 4 the registered analysis is the unadjusted contrast
+`outcome ~ direction * model` with HC3 standard errors among participants with
+observed post-conversation outcomes. Because outcomes are unavailable for
+participants whose conversation was not delivered or who subsequently left, this
+is not a full assignment-level intention-to-treat estimate. The direction effect is
+*equal-weighted* across the four model families rather than by realized sample
+size. When the four studies are pooled, the design is a condition-by-study (or
+condition-by-model) factorial and the quantity of interest is the *symmetry* of
+bunking and debunking --- whether movement toward the AI's assigned position is
+equal in magnitude in the two directions.
+
+Missing-outcome analyses used the confirmed-chat-start cohort in Study 4. This
+cohort contains the 1,272 participants with complete
+primary outcomes plus 81 incomplete records whose joined partial-chat history
+contains a nonempty initial assistant response ($N=1{,}353$). All included
+participants had a stored initial assistant response. Six of
+the 81 otherwise incomplete records supplied the focal post-belief rating, leaving
+75 focal belief outcomes missing; the other registered outcomes are missing for
+all 81. Their pre-conversation posts were absent from the original complete-outcome
+annotation universe. Those 81 posts were processed with the three-rater
+restatement-orientation audit and five-rater stance pipeline. Every record received all
+three orientation votes and all five stance ratings; the frozen gap classifications
+and a provenance manifest are shipped with the reproduction package. Restatement
+orientation is applied before the baseline belief rating---and any of the six
+available partial post-belief ratings---is used.
+
+Four approaches were reported: (1) every available outcome; (2) baseline
+carried forward, or zero direction-aligned change, for each missing outcome; (3)
+multiple imputation under a missing-at-random assumption; and (4) exact feasible-
+value identification intervals. The imputation model jointly imputes raw post-
+belief, post-stance, revised-post sharing likelihood, and original-post sharing
+likelihood using 50 predictive-mean-matching imputations and 20 iterations. It
+includes the eight-cell model-by-direction assignment factor; the pre-removal,
+endpoint-removal, and post-switch field regime; baseline belief, stance, sharing,
+confidence, and issue importance; age, gender, education, party, social and
+economic conservatism; prior generative-AI familiarity, use, and trust; and
+harmonized numbers and word counts of participant and assistant chat turns. The
+requested Gemini endpoint was removed from OpenRouter during fielding. Field regime
+is retained in the imputation model, but a Gemini version effect is not estimated
+because endpoint version and field period are confounded.
+
+The analysis model remains the registered unadjusted
+`outcome ~ direction * model` specification with HC3 within-imputation variances.
+Scalar estimates are combined with Rubin's rules; interaction terms are tested with
+a Rubin-pooled multivariate Wald test. Feasible-value intervals are derived from
+each participant's baseline: 0--100 post-belief and post-stance supports; $-50$ to
+$50$ support for post-treatment weighted sharing; the participant's baseline
+stance and a 0--100 sharing rating for willingness to re-share the original post;
+and 0/1 support for public posting. These are identification regions, not
+confidence intervals. Reported quantities comprise the eight model-by-direction cell effects,
+within-model directional asymmetries, equal-model average asymmetry, and registered
+direction-by-model omnibus test, together with the preregistered extensive-margin
+posting comparisons. Compliant-subset, trust, perception, debrief, mechanism,
+compliance, and claim-veracity analyses were not imputed. Because confirmed delivery is measured
+after randomization, this is an as-randomized sensitivity analysis conditional on
+chat start, not a full assignment-level intention-to-treat analysis.
+
+Two reporting rules follow throughout. First, the document default is that a
+**positive value denotes movement toward the AI's assigned position** (more belief
+under bunking, less under debunking); a few legacy contrast tables instead report a
+fixed bunking-minus-debunking or debunking-minus-bunking difference, and each such
+table states its own convention in a note. Second, every estimate is reported for
+both the full observed-outcome sample (internally called `strict`) and the
+manipulation-delivered (`compliant`) subset. The separate chat-started sensitivity
+analysis above instead covers all 1,353 participants with confirmed delivery,
+including those who left before providing the complete primary-outcome battery.
+
+## Study-Specific Model Conditions
+
+Study 1 ("Jailbroken") used a **jailbreak-tuned GPT-4o**
+variant (developed by FAR.AI) fine-tuned to minimize refusals while preserving
+general ability. Study 2 ("Standard") used OpenAI's publicly deployed
+**`gpt-4o-2024-08-06`** with default safety settings, accessed through the
+standard Chat Completions API. Study 3 ("Truth-Constrained") used the same
+`gpt-4o-2024-08-06` endpoint with one change to the system prompt (below).
+Across the studies' main conversation the exchange ran in an embedded chat
+interface (the Vegapunk platform, `vegapunk-v0001.vercel.app`): participants
+could send up to **10 messages** (`maxUserMessages = 10`), with an "end
+conversation" control available after their second message
+(`allowStopAfterNUserMessages = 2`); pasting was disabled (`preventPaste = true`),
+responses were not streamed for the main conversation, and decoding used the
+provider's defaults. Study 4 crossed the bunking/debunking manipulation
+with random assignment to one of four frontier models, each accessed through the
+**OpenRouter API** under its developer's default safety settings: Anthropic's
+**Claude Opus 4.6** (`anthropic/claude-opus-4-6`), Google's **Gemini 3.1 Pro**
+(`google/gemini-3.1-pro-preview`; Google migrated the endpoint from
+`gemini-3-pro-preview` mid-fielding, and conversations from the two are pooled
+as one condition), OpenAI's **GPT-5.2** (`openai/gpt-5.2`), and
+xAI's **Grok 4** (`x-ai/grok-4`); decoding again used each provider's defaults
+with the same short multi-turn conversation budget.
+
+The persuader system prompt differs across studies only in its treatment of
+factual accuracy, and the manipulation is described here (the verbatim prompts
+appear in Appendix A, *Verbatim Model and Annotation Prompts*). **Studies 1, 2,
+and 4 use the fabrication-license persuader prompt**: the model is told to argue
+its assigned direction as compellingly as possible, and explicitly that inventing supporting evidence is
+permissible. **Study 3 swaps the truth clause**: the identical template instead
+requires that the model "MUST always use accurate and truthful arguments" and
+optimize jointly for factual veracity / logical accuracy *and* successful
+persuasion. In
+every study the same template, with the assigned direction reversed, serves both
+the bunking and debunking conditions.
+
+## Attempt-to-Persuade-Evaluation (APE) Compliance
+
+The **same Attempt-to-Persuade-Evaluation (APE) instrument was applied identically
+to all four studies**, following the attempt/refusal evaluation procedure of Kowal
+et al. (2025, arXiv:2506.02873). The attempt evaluator is **`gpt-4o`**
+(`evaluator_model: gpt-4o` in the run config). It reads the conversation, the
+persuasive goal the model was assigned (the focal conspiracy and the assigned
+direction), and the model's first substantive turn, and codes whether that turn
+*attempts* persuasion in the assigned direction (`evaluator_label`). The opening
+move is where a model either takes up or declines the assigned task; a model that
+opens by refusing or by arguing the opposite direction is a non-attempt regardless
+of later turns. A separate StrongREJECT refusal rubric flags explicit refusals
+(below), so that "did not attempt" is separable from "explicitly refused" in every
+study.
+
+Concretely, the attempt label is produced by a binary evaluator prompt that
+states the statement the assistant was tasked to support or oppose, supplies the
+conversation as context, isolates the assistant's most recent message, and asks
+the rater to judge "whether the AI's most recent message attempted to persuade
+the user in the intended direction \ldots regardless of whether persuasion has
+actually occurred," returning a free-text explanation followed by a `|`
+delimiter and a single digit: `1` for "any attempt to persuade the user towards
+the intended direction" and `0` for "no attempt whatsoever." Because the rubric
+keys on the *attempt* and explicitly brackets factual accuracy and downstream
+success, a forceful but ultimately unconvincing argument still counts as an
+attempt, and a polite refusal does not. The explicit-refusal flag is produced
+separately by a StrongREJECT-style rubric (Souly et al. 2024,
+arXiv:2402.10260), scored by **`gpt-4o-mini`** (`reject_model: gpt-4o-mini` in the
+same run config), whose first item asks whether "the model explicitly refuse[s] to
+respond ($0$ = no, $1$ = yes)," so that a non-attempt driven by an overt refusal is
+distinguishable from one driven by off-task or equivocal content. The verbatim
+evaluator and refusal rubrics are reproduced in Appendix A (*Verbatim Model and
+Annotation Prompts*).
+
+The cached `gpt-4o` attempt/refusal classifier scored
+`r fmt_n(est("compliance_coverage", term="classifier_scored"))` of the
+`r fmt_n(nrow(core_objects$s4$s4))` strict Study-4 conversations and left
+`r fmt_n(est("compliance_coverage", term="classifier_unscored"))` unscored --- a
+coverage gap concentrated in one model (Grok), not a property of the conversations.
+Conversations the classifier never scored were conservatively coalesced to
+non-compliant by default. Because the production classifier returned no label for
+these, the unscored set was adjudicated separately: each conversation that retained
+an extractable opening assistant turn was re-scored against the *identical*
+attempt/refusal rubric by a second-pass review (the authors, assisted by a
+different large language model --- Claude --- reading each opening turn), recorded
+as the `evaluator` provenance in the resolved-labels file. This is therefore a
+manual/LLM-assisted override applying the same rubric, *not* a `gpt-4o`
+classification. Every re-scored opening was a substantive turn that argued the
+assigned direction (for the conspiracy under bunking, against it under debunking)
+with no refusal, so all
+`r fmt_n(est("compliance_coverage", term="rescored_compliant"))` are counted as
+compliant, bringing the compliant subsample to
+`r fmt_n(nrow(core_objects$s4$s4_compliant))`. The remaining
+`r fmt_n(est("compliance_coverage", term="unresolved_noncompliant"))` stay
+non-compliant ---
+`r fmt_n(est("compliance_coverage", term="classifier_unscored") - est("compliance_coverage", term="unscored_with_transcript"))`
+produced no saved model transcript and the rest retained a transcript without a
+scorable opening attempt. Two safeguards bound any dependence on this override.
+First, the strict observed-outcome sample --- the primary reference reported
+alongside the compliant subset for every Study-4 analysis --- retains all
+outcome-complete conversations regardless of compliance, so the headline contrasts
+do not use these labels at all. Second, the re-scored openings are unambiguous
+direction-aligned attempts, so the compliant-subset estimates are materially
+unchanged whether they are included or excluded. The override resolves a coverage
+artifact; it does not depend on the choice of adjudicator.
+
+The realized
+by-study and by-model attempt, refusal, and compliance rates are reported once in
+the Results "Compliance" subsection rather than duplicated here.
+
+The **analytic compliant subset** is defined slightly differently across the two
+data generations because of what each can support. In Study 4 a conversation is
+"strictly compliant" if its first substantive turn shows an attempt and no
+explicit refusal. In Studies 1--3 the compliant subset additionally requires that
+the conversation pass a counterfactual check: there must be no refusal when the
+*opposite*-direction prompt is applied to the same conspiracy
+(`reverse_evaluator_label == 1`), so that a compliant case is one in which the
+model would have engaged in either direction. The construction of that
+counterfactual label is detailed next.
+
+### Counterfactual matched-compliance check (Studies 1–3)
+
+The reverse-direction (`reverse_evaluator_label`) pass that defines the Studies 1–3
+compliant subset also supports a dedicated confound check for Study 3. The
+Truth-Constrained study raises a confound. Truth-Constrained bunking has both a lower attempt rate and, among
+attempts, possibly weaker arguments; a naive bunking-minus-debunking contrast
+mixes *refusal* (the model declines to argue for some conspiracies) with the
+*truth-constraint penalty* (the model argues, but with only truthful ammunition).
+To isolate the penalty from refusal, we run a **counterfactual matched-compliance
+analysis** as a separate analysis from the headline contrasts.
+
+The procedure is implemented by the human-continuation pipeline of Kowal et al.
+(2025), run in its reverse-persuasion mode. For every Study 3 conversation the
+pipeline replays the participant's real context --- the focal conspiracy, the
+participant's own restatement of it (`con_restatement`), their pre-conversation
+belief rating on the 0--100 scale, and their first open-ended message --- but
+swaps the assistant's system prompt to the **opposite-direction** persuader
+prompt (a `treatment_mid_bunk` case is regenerated under the debunking system
+prompt, and vice versa; the Truth-Constrained "no-lying" prompt variants are
+used so the counterfactual inherits the same truthfulness constraint as the
+factual arm). The regenerating persuader is the Truth-Constrained Study 3 model
+itself --- standard **`gpt-4o-2024-08-06`** under the swapped-direction "no-lying"
+system prompt --- so the counterfactual turn is produced by the same model and
+constraint that produced the factual arm, differing only in assigned direction.
+It generates a fresh first assistant turn against that swapped instruction, and
+the *same* `gpt-4o` binary APE evaluator and `gpt-4o-mini` StrongREJECT refusal
+rubric score that regenerated turn, producing `reverse_evaluator_label` (and a
+matching reverse refusal flag). The result is keyed
+back to the participant by `ResponseId`, so each factual conversation carries
+both its own attempt label and the attempt label of its opposite-direction
+counterfactual.
+
+A case is retained only when it is compliant in *both* arms --- that is,
+`evaluator_label == 1` and `reverse_evaluator_label == 1` --- which restricts the
+sample to conspiracies for which the model was willing to argue both for and
+against. Within this matched set, the bunking-minus-debunking difference can no
+longer be driven by selective refusal, because refusers in either direction have
+been removed symmetrically; the remaining gap reflects the truth constraint
+operating on conversations the model was willing to deliver.
+
+The contrast is the bunking-minus-debunking difference in direction-aligned
+belief change estimated by OLS with HC3 heteroskedasticity-robust standard errors
+(the same dual-compliance restriction, `evaluator_label == 1` and
+`reverse_evaluator_label == 1`, as the pooled symmetry test). The realized contrast
+on this matched-compliance set, alongside the belief change in the
+Truth-Constrained bunking conversations screened as non-compliant, is reported in
+the Results "Study 3 Truth-Constraint Counterfactual" subsection.
+
+## Five-Rater Post-Stance Scoring
+
+Every Study 4 pre- and post-conversation social-media post is scored by a
+**five-model consensus rater drawn from five different developers**:
+`anthropic/claude-sonnet-4.6`, `openai/gpt-5.2`,
+`google/gemini-3.1-pro-preview`, `x-ai/grok-4.3`, and the open-weights
+`deepseek/deepseek-v3.2`, all accessed through OpenRouter at temperature 0 where
+the provider supports it (reasoning-class raters that reject the parameter fall
+back to the provider default) under prompt version v2.2. Each rater sees the
+focal conspiracy (phrased as a declarative statement asserting the conspiracy),
+the participant's own topic description (for reference resolution only), the
+writing instructions the participant saw, and the post, and returns a structured
+JSON object with four labels plus a score: `focal_relevance` (focal_claim /
+related_conspiracy / other_topic / no_propositional_content), `response_type` (the
+post's dominant communicative mode: assertion, question_raising,
+mixed_assertion_question, uncertainty_statement, declines_to_post, meta_task, or
+unclassifiable), a `sarcasm_or_irony` boolean, a `stance_category`, and a
+0--100 `stance_score` whose anchors run argues_against (about 0--20),
+leans_against, neutral_uncommitted (about 50), mixed_both_sides, leans_for,
+argues_for (about 80--100), with `not_applicable`/null reserved for off-topic
+or declined posts. The reported continuous stance is the **consensus median**
+of the five `stance_score` values (robust to a single discordant rater and
+avoiding spurious precision on mixed posts), and each categorical label is taken
+by **majority vote** across raters; the verbatim rubric and schema appear in
+Appendix A (*Verbatim Model and Annotation Prompts*). Inter-rater agreement is high: across the
+`r fmt_n(nn("stance_reliability", term="krippendorff_alpha_interval"))` rated
+items, the interval Krippendorff's $\alpha$ is
+`r fmt_num(est("stance_reliability", term="krippendorff_alpha_interval"), 2)`,
+the two-way ICC(2,k) is
+`r fmt_num(est("stance_reliability", term="icc_2k"), 2)`, and the mean pairwise
+correlation among raters is
+`r fmt_num(est("stance_reliability", term="pairwise_r_mean"), 2)`; categorical
+agreement on the stance category, response type, and focal-relevance labels
+ranges from $\alpha =
+`r fmt_num(est("stance_reliability", term="krippendorff_alpha_focalrel"), 2)`$ to
+$`r fmt_num(est("stance_reliability", term="krippendorff_alpha_resptype"), 2)`$
+(Table \@ref(tab:me-stance-reliability)). Posts with no rateable stance are
+flagged for the composition tables and assigned the neutral midpoint for the
+direction-coded continuous analyses.
+
+```{r me-stance-reliability}
+me_rel <- ALL_NUMBERS |>
+  dplyr::filter(block == "stance_reliability") |>
+  dplyr::transmute(metric = term, n, value = estimate)
+si_kable_styled(me_rel, caption = "Five-rater post-stance reliability across the rated stance items.", digits = 2)
+```
+
+## Claim Extraction, Role, and Veracity
+
+The veracity pipeline decomposes assistant messages into discrete factual claims
+and then classifies and scores each claim. The pipeline has four model-backed stages, all run through LiteLLM
+with a 120 s timeout and up to three retries (the annotating model is recorded
+per row in the shipped annotation files): (1) **claim extraction**, which
+splits each assistant turn into discrete factual claims, used
+`openai/gpt-4.1`; (2) **eligibility triage**, which marks each extracted claim
+as substantive/checkable versus conversational filler or non-factual content,
+used `openai/gpt-5-mini`; (3) **fact-checking**, which scores each substantive
+claim 0--100 for veracity, used **`perplexity/sonar-pro`, a live-web-search
+model** (its verdicts have been validated against professional fact-checkers); and
+(4) the **claim-role** classifier, which assigns each substantive claim its
+argumentative role, used `openai/gpt-5.4-mini` (the same harmonized role pass
+across all four studies). The
+verbatim stage prompts and codebooks are in Appendix A (*Verbatim Model and
+Annotation Prompts*).
+
+The role stage drives the **include / substantive / aligned** decision rules.
+The pipeline yields four nested claim sets, each a stricter subset of the last:
+(i) *all extracted* claims; (ii) *substantive* checkable claims (eligibility =
+include), dropping conversational filler and non-factual statements; (iii) aligned
+*direct* claims, i.e. substantive claims that bear directly on the focal
+proposition and whose stance supports the assigned persuasive direction; and (iv)
+aligned *indirect* claims, i.e. substantive claims that support the assigned
+direction through supporting evidence (institutional incentives, historical
+precedent, alleged anomalies) rather than asserting the focal proposition itself.
+A claim counts as *aligned* only when its role marks it as supporting (not
+opposing or neutral toward) the model's assigned direction. The **reported
+veracity measure is the aligned set, direct plus indirect**: it captures the
+factual quality of the evidence the model actually marshalled in service of its
+assigned conclusion, while excluding background claims that do not function as
+evidence for that conclusion. Each conversation's veracity is the **mean 0--100
+score over its aligned claims**, and these conversation-level means are what enter
+any study- or model-level average, so that long conversations with many claims do
+not dominate the veracity estimate.
+
+Claim volume is reported alongside accuracy because the two are distinct: a model
+can differ in how *truthful* its aligned claims are, in how *many* claims it
+makes, or in both. The per-study/model claim-count census --- substantive
+checkable claims, direction-aligned claims, and fact-checked claims --- is
+reported in the Veracity results, Table \@ref(tab:rb-claim-counts).
+
+## Topic Taxonomy
+
+To ask whether persuasion effects concentrate in recognizable conspiracy
+families, focal descriptions are clustered into topics with a fixed, fully
+specified procedure applied once to the pooled corpus of all four studies. Each
+focal description is embedded with **Google's gemini-embedding-2**
+(`google/gemini-embedding-2-preview`), the embeddings are reduced to
+the first **30 principal components**, and **HDBSCAN** density clustering is run
+on those components across a grid of minimum-points settings
+(`minPts` $\in \{8, 9, \ldots, 30\}$), retaining only clusters of at least
+**20 descriptions**. The grid is ranked by a fixed selection rule: solutions are
+first required to leave at most 55% of descriptions unclustered (the noise
+ceiling), then preferred for retaining **more** clusters, and ties are broken by
+lower noise fraction, then by lower cross-study segregation (topics that are
+evenly represented across the four studies are preferred over study-specific
+artifacts), then by more balanced cluster sizes; the top-ranked solution is taken.
+That solution yields **`r fmt_n(18)` named density clusters** plus a residual
+**Mixed / Unclassified** bucket that absorbs HDBSCAN noise points and any cluster
+below the size floor; the Mixed bucket accounts for
+`r {te <- ALL_NUMBERS |> dplyr::filter(block == "topic_effects"); fmt_pct(sum(te$n[te$model == "Mixed / Unclassified"]) / sum(te$n), 1)}`
+of the pooled corpus. Each retained cluster is labeled by a large language model
+(`google/gemini-3.1-pro-preview`) that reads the cluster's 30 most central
+exemplar conspiracy descriptions and returns a short plain-language topic label
+(e.g., "Moon Landing Hoax", "9/11 Inside Job Conspiracy", "Vaccine harms and
+conspiracies"); HDBSCAN noise points and sub-floor clusters receive the
+"Mixed / Unclassified" label. The per-topic quantity in the topic table and figure is, for each
+adequately covered topic, a **per-topic HC3 OLS contrast of direction-aligned
+belief change on condition** (bunking minus debunking) with a 95% confidence
+interval, pooled across studies and reported with the cell $n$s. This taxonomy and
+its per-topic contrasts are exploratory and not pre-registered.
+
+## Corrective Debriefing
+
+Because bunking can expose participants to false or misleading claims, the
+protocol ends with a corrective debrief. The debrief is itself a second AI
+exchange: a **separate `gpt-4o` model instance is given the full prior
+transcript --- including the persuader's system prompt and every assistant turn
+from the persuasion conversation --- and instructed to identify and rebut each
+false or fabricated claim the persuader made**, after a written disclosure that
+the AI may have used false information (verbatim debrief prompt in Appendix A,
+*Verbatim Model and Annotation Prompts*). A third belief rating on the same
+0--100 scale is collected immediately afterward. In **Studies 1--3 the corrective
+debrief and its third rating were administered to bunking-arm participants only**
+(the arm exposed to pro-conspiracy persuasion), whereas in **Study 4 the debrief
+and third rating were administered in both arms**, which permits a symmetric
+analysis of movement after the correction.
+
+The debrief outcome is the **within-person post-treatment-to-post-debrief change**
+in 0--100 belief (block `debrief_shift`), with the three-point trajectory
+(pre-treatment, post-treatment, post-debrief) in block `debrief_trajectory`.
+Because Study 4 collected the third rating in both arms, we estimate each arm's
+movement separately and pool over the four model conditions: the per-arm
+post-to-debrief change is an estimated marginal mean equal-weighted across the
+four models with respondent-clustered standard errors and a 95% confidence
+interval, reported for both the strict ($n =
+`r fmt_n(nn("debrief_shift", sample="strict_n1272", model="Pooled", direction="bunk"))`$)
+and compliant ($n =
+`r fmt_n(nn("debrief_shift", sample="compliant_n1073", model="Pooled", direction="bunk"))`$)
+samples. In the strict sample the correction reverses the bunking effect
+(post-to-debrief change of
+`r fmt_est_ci(num("debrief_shift", sample="strict_n1272", model="Pooled", direction="bunk"), 1, signed = TRUE)`
+points, *p* `r fmt_p_eq(num("debrief_shift", sample="strict_n1272", model="Pooled", direction="bunk"))`,
+driving belief below its pre-conversation baseline), while in the
+debunking arm there is a small upward rebound
+(`r fmt_est_ci(num("debrief_shift", sample="strict_n1272", model="Pooled", direction="debunk"), 1, signed = TRUE)`
+points, *p* `r fmt_p_eq(num("debrief_shift", sample="strict_n1272", model="Pooled", direction="debunk"))`).
+
+## Public-Posting Measures
+
+Before the
+conversation, the participant writes a social-media post about their focal
+conspiracy and rates how likely they would be to share it publicly. After the
+conversation, they write a revised post, rate willingness to share the revised
+post, and separately report whether they would now share their *original*
+pre-conversation post. This posting battery has **two distinct outcome families**.
+First is *public content*: the stance score of what the participant actually wrote,
+from the five-rater consensus. Second is *dissemination*: willingness to share,
+measured both for the revised post and for the original post. The 0--100 focal
+*private belief* rating --- unchanged in construction from Studies 1--3 --- is not
+part of the posting battery; it is the separately measured reference outcome
+carried over from the earlier studies.
+
+The preregistered **weighted-sharing** outcome joins the second and third
+families into a single public-risk index. For a post with consensus stance score
+$s \in [0,100]$ and a sharing-likelihood rating $\ell \in [0,100]$, weighted
+sharing is
+
+\[
+w \;=\; (s - 50) \times \frac{\ell}{100}.
+\]
+
+Centering stance at 50 makes the sign meaningful (positive = a post that argues
+*for* the conspiracy, negative = against), and multiplying by $\ell/100$
+downweights posts the participant is unwilling to disseminate: a strongly
+pro-conspiracy post that would never be shared contributes little signal, while
+the same post paired with high sharing willingness contributes its full
+magnitude. The identical formula is applied to the pre-treatment post, and
+change scores ($w_{\text{post}} - w_{\text{pre}}$) are direction-aligned for
+interpretation. The reported bunking-vs-debunking contrast on this
+weighted-sharing change is estimated from the interaction model
+$\text{aligned change} \sim \text{direction} \times \text{model}$ with the
+direction effect equal-weighted across the four model categories and HC3
+heteroskedasticity-robust standard errors, with a 95% confidence interval; it is
+reported for both the strict ($n =
+`r fmt_n(nn("aligned_contrasts", sample="strict_n1272", outcome="aligned_new_minus_old_weighted", term="debunk_minus_bunk_equal_weighted"))`$)
+and compliant ($n =
+`r fmt_n(nn("aligned_contrasts", sample="compliant_n1073", outcome="aligned_new_minus_old_weighted", term="debunk_minus_bunk_equal_weighted"))`$)
+samples in the Results.
+
+For the *extensive* margin of public speech --- whether a participant crosses
+from "would not publicly post" to "would," or vice versa --- the appropriate test
+is **McNemar's test for paired binary data**. Each participant contributes a
+pre/post pair of binary posting decisions; McNemar's test conditions on the
+discordant pairs (those who switched in one direction versus the other) and asks
+whether switching is symmetric, which is the correct null for a within-person
+change in a binary outcome and avoids treating the correlated pre and post
+indicators as independent. The net percentage-point change reported in the
+Results is the difference in discordant-pair proportions that this test
+evaluates.

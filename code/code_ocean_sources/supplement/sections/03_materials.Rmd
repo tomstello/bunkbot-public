@@ -1,0 +1,163 @@
+# Materials
+
+This section gives the verbatim wording of the key measures reported in the
+paper. The complete instruments are released as Qualtrics `.qsf` files, and the
+verbatim model and annotation prompts (the two persuader prompts and the
+fabrication license inside them, the Study-3 truth constraint, the equivocality
+classifier, the corrective-debrief prompt, the multi-stage fact-check prompts, the
+five-rater stance prompt, and the attention/bot screeners) are reproduced in
+Appendix A.
+
+`typewriter` tokens are the variable names under which a measure is released in
+the data. Qualtrics pipes such as `${e://Field/conRestatement}` are placeholders
+resolved at run time, marking where participant-specific content was injected.
+Studies 1--3 (Jailbroken, Standard, and Truth-Constrained GPT-4o) share one
+instrument; Study 4 re-uses those measures and adds the pre-treatment
+social-media items and the public social-posting battery.
+
+```{r ma-setup, include=FALSE}
+# Verbatim key-item wording is parsed from the QSF source files (key_item_wording).
+# The parent Rmd setup chunk has already loaded these.
+```
+
+## Key reported measures
+
+Table \@ref(tab:ma-key-items) gives the verbatim wording of every measure the
+paper reports: the pre- and post-conversation focal belief item, the
+Generic Conspiracist Beliefs Scale (GCBS), Trust in AI, the four perception
+measures, the uncertain-topic elicitation, and the Study-4 social-posting
+battery.
+
+```{r ma-key-items}
+key_tags <- c(
+  "mid_topic", "mid_evidence",
+  "belief_rating_pre", "belief_rating_post", "belief_rating_debrf",
+  "GCBS_pre", "GCBS_post",
+  "genai_trust", "trust2", "trust_debrf",
+  "ArgStrength", "new_info", "Unbiased", "Collaborative",
+  "social_post", "final_post",
+  "share_pre", "share_post", "share_original_post_now"
+)
+ki_label <- c(
+  mid_topic = "Uncertain-topic elicitation",
+  mid_evidence = "Reasons for partial belief",
+  belief_rating_pre = "Focal belief (pre-conversation, 0-100)",
+  belief_rating_post = "Focal belief (post-conversation, 0-100)",
+  belief_rating_debrf = "Focal belief (post-debrief, 0-100; Study 4)",
+  GCBS_pre = "GCBS (pre)",
+  GCBS_post = "GCBS (post)",
+  genai_trust = "Trust in AI (pre)",
+  trust2 = "Trust in AI (post)",
+  trust_debrf = "Trust in AI (post-debrief; Study 4)",
+  ArgStrength = "Perceived argument strength",
+  new_info = "Perceived new information",
+  Unbiased = "Perceived impartiality",
+  Collaborative = "Perceived collaboration",
+  social_post = "Public post (pre-conversation; Study 4)",
+  final_post = "Public post (post-conversation; Study 4)",
+  share_pre = "Willingness to post pre-conversation message (Study 4)",
+  share_post = "Willingness to post revised message (Study 4)",
+  share_original_post_now = "Willingness to re-post original message (Study 4)"
+)
+ki <- key_item_wording |>
+  dplyr::filter(data_export_tag %in% key_tags) |>
+  dplyr::distinct(data_export_tag, .keep_all = TRUE) |>
+  dplyr::transmute(
+    Measure = ki_label[data_export_tag],
+    Variable = data_export_tag,
+    Wording = stringr::str_trunc(stringr::str_squish(question_text), 240)
+  )
+ki <- ki[match(key_tags, ki$Variable), ]
+ki <- ki[!is.na(ki$Measure), ]
+si_kable_styled(
+  ki,
+  caption = "Verbatim wording of the key reported measures (one row per measure). Wording is truncated for display; full instruments are in the Qualtrics .qsf files."
+)
+```
+
+```{r ma-response-scales}
+# Verbatim response anchors for the discrete-choice key items, pulled from the QSF
+# (one study's version per item; identical across studies). Slider measures (focal
+# belief, sharing likelihood) have no discrete choices and are 0-100 continuous.
+rs <- survey_materials$choices |>
+  dplyr::filter(data_export_tag %in% key_tags, section == "Choices",
+                !is.na(choice_text), nzchar(trimws(choice_text))) |>
+  dplyr::group_by(data_export_tag) |>
+  dplyr::filter(study == dplyr::first(study)) |>
+  dplyr::arrange(choice_order, .by_group = TRUE) |>
+  dplyr::summarise(`Points` = dplyr::n(),
+                   `Response scale (verbatim anchors)` =
+                     paste0(choice_order, " = ", stringr::str_squish(choice_text), collapse = "; "),
+                   .groups = "drop") |>
+  dplyr::mutate(Measure = unname(ki_label[data_export_tag])) |>
+  dplyr::filter(!is.na(Measure)) |>
+  dplyr::arrange(match(data_export_tag, key_tags)) |>
+  dplyr::transmute(Measure, Points, `Response scale (verbatim anchors)`)
+si_kable_styled(
+  rs,
+  caption = "Response scales for the key discrete-choice measures: verbatim anchor labels and number of scale points, extracted from the Qualtrics survey definitions. Slider measures -- the 0-100 focal-belief rating and the 0-100 sharing-likelihood items -- are continuous and labelled only at their endpoints (focal belief: 0 = definitely false, 50 = uncertain, 100 = definitely true), as described below."
+)
+```
+
+## Pre-conversation measures
+
+After consent and the screening items (Section
+\@ref(sample-construction-and-screening)), participants completed a baseline
+battery. **Trust in AI** (`genai_trust`; re-administered post-conversation as
+`trust2` and, in Study 4, post-debrief as `trust_debrf`) was a single 7-point
+Likert item, "I generally trust AI technologies like ChatGPT." **Generic
+conspiracist beliefs** (`GCBS_pre`, re-administered as `GCBS_post`) used the
+seven-item short form of the Generic Conspiracist Beliefs Scale on a 9-point
+scale, averaged into a composite. Two 0--100 sliders measured **familiarity**
+(`genai_fam`) and **use frequency** (`genai_use`) of generative AI; both enter the
+causal-forest moderation analysis alongside trust in AI, baseline belief, GCBS,
+and the demographic covariates.
+
+Participants then selected a single focal conspiracy theory. The analyzed cells
+used the "uncertain" elicitation (`mid_topic`), which asked participants to
+describe, in one to two sentences, a conspiracy theory proposed before 2024 that
+they regarded as genuinely uncertain --- one with "possible evidence for both
+sides." Participants then gave their reasons for partial belief (`mid_evidence`).
+Both responses were passed to a GPT-4-class **equivocality classifier** that
+returned exactly one of `TRUE`, `FALSE`, or `INVALID` (full prompt in Appendix
+A); only participants reaching `TRUE` within one correction were eligible. The
+survey then displayed an AI-generated one-sentence restatement of the chosen
+theory (`${e://Field/conRestatement}`) and collected the baseline belief rating
+(`belief_rating_pre`) on a 0--100 slider anchored at `0 = Definitely false`,
+`50 = Uncertain`, `100 = Definitely true`. As preregistered, the analytic sample
+was restricted to baseline ratings inside the equivocal window
+$25 < \text{pre-belief} < 75$.
+
+## Post-conversation measures
+
+Immediately after the AI conversation, participants re-rated belief on the same
+0--100 slider. The released variable is `belief_rating_post`. Participants then re-completed the GCBS and Trust-in-AI items
+and rated four perceptions of the AI interlocutor (secondary perception measures):
+**argument strength** (`arg_strength`, 5-point weak--strong), **new information**
+(`new_info`, 10-point), **perceived bias** (`unbiased`, 5-point
+biased--unbiased), and **perceived collaboration** (`collaborative`, 5-point
+adversarial--collaborative).
+
+In Study 4, after a corrective debrief, participants rated belief a third time
+(`belief_rating_debrf`) and re-rated Trust in AI (`trust_debrf`).
+
+## Social-posting battery (Study 4)
+
+Study 4 bracketed the AI conversation with a public-post composition battery. Two
+free-text **post composition** tasks --- one before the conversation
+(`social_post`) and one after (`final_post`) --- asked the participant to write a
+public post as they naturally would online; these are the texts later scored for
+stance. Three **share-likelihood** sliders (0--100) captured stated willingness to
+post the pre-conversation message (`share_pre`), the revised message
+(`share_post`), and --- after the original post was re-shown verbatim --- the
+*original* message again (`share_original_post_now`). The preregistered
+weighted-sharing outcome combines post stance with share willingness; its
+construction is given with the public-speech results.
+
+## Annotation prompts and claim measures
+
+The measurement-layer prompts --- claim extraction, fact-check eligibility triage,
+focal-claim veracity, claim role relative to the focal belief, attempt-to-persuade
+compliance, and social-post stance --- are reproduced verbatim in Appendix A. The
+descriptive prevalence of each claim type is reported with the veracity results
+(Section \@ref(claim-veracity-and-claim-counts)).
