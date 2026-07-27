@@ -69,11 +69,12 @@ if (knitr::is_latex_output()) {
 
 paths <- pkg_paths(REPO_ROOT)
 s13   <- build_s1s3(paths, duration_filter = FALSE)          # canonical no-duration sample (1092/814/818)
-# The Methods child reads the same fully rebuilt numerical cache as the SI for
-# attrition quantities.  Load it explicitly here so a standalone main-document
-# render does not depend on objects left behind by an earlier interactive run.
-.numbers_cache <- readRDS(file.path(REPO_ROOT, "output", "_all_numbers.rds"))
-ALL_NUMBERS <- if (is.data.frame(.numbers_cache)) .numbers_cache else .numbers_cache$all_numbers
+# The Methods child reads the same numerical cache as the SI for attrition
+# quantities. Build it API-free from the shipped data when a fresh checkout has
+# no cache yet (as in a new Code Ocean capsule).
+source(file.path(REPO_ROOT, "code", "R", "build_all_numbers.R"))
+.numbers_cache <- load_or_build_all_numbers(REPO_ROOT)
+ALL_NUMBERS <- .numbers_cache$all_numbers
 stopifnot(is.data.frame(ALL_NUMBERS), nrow(ALL_NUMBERS) > 0)
 
 # ---- inline formatters (en-dash minus; consistent rounding) ----------------

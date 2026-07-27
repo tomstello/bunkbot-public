@@ -15,7 +15,7 @@
 # Reproduction is API-FREE: everything reads the committed files under data/.
 
 RSCRIPT ?= Rscript
-.PHONY: help results supplement figures html pdf word test scan clean regenerate-api manuscript-check manuscript-wire
+.PHONY: help results supplement figures html pdf word test scan clean regenerate-api manuscript-check manuscript-wire code-ocean
 
 help:
 	@printf "Bunkbot reproduction targets:\n"
@@ -26,6 +26,7 @@ help:
 	@printf "  make test                 %s\n" "developer regression check (code/dev_qa.R)"
 	@printf "  make manuscript-check     %s\n" "check the Word manuscript's numbers against the recompute"
 	@printf "  make manuscript-wire      %s\n" "write '<manuscript> (wired).docx' with corrections as tracked changes"
+	@printf "  make code-ocean          %s\n" "run the Code Ocean driver locally -> code_ocean_results/"
 	@printf "  make scan                 %s\n" "gitleaks secret scan (.gitleaks.toml)"
 	@printf "  make clean                %s\n" "remove rendered output/"
 	@printf "  make regenerate-api       %s\n" "opt-in, key-gated regeneration of cached annotations (COSTS MONEY)"
@@ -50,6 +51,9 @@ word:
 
 test:
 	$(RSCRIPT) code/dev_qa.R
+
+code-ocean:
+	RESULTS_DIR="$(CURDIR)/code_ocean_results" bash code/run
 
 # Manuscript wiring: refresh the value manifest from the live recompute, then
 # check (drift report) or redline (tracked-changes copy; original never touched).
