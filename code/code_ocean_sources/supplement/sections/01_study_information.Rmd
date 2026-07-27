@@ -1,0 +1,134 @@
+# Study information
+
+The manuscript reports four between-subjects experiments (three preregistered)
+that share a common core paradigm. In every study a participant first identifies a
+conspiracy theory about which they are genuinely uncertain, rates belief in an
+AI restatement of that theory on a 0-100 scale, holds a conversation with an AI
+that is randomly assigned to argue *for* the theory ("bunking") or *against* it
+("debunking"), and then rates belief again. Studies 1-3 vary the GPT-4o
+configuration driving the conversation; Study 4 crosses the same
+bunking/debunking manipulation with four frontier model families and adds public
+social-media outcomes. The four studies are reported together throughout this
+supplement because the paradigm, the belief instrument, and the
+direction-aligned coding are held constant across them, so a model or condition
+contrast means the same thing in each.
+
+## Data and code availability
+
+The data, analysis code, and cached model-annotation files needed to reproduce
+every number, table, and figure in this supplement are available in the project
+repository; `REPRODUCIBILITY.md` there documents the inputs, the source map, and
+the build steps. Cached outputs of the claim-extraction, fact-checking,
+stance-scoring, compliance, and embedding pipelines are treated as measurement
+data, on the same footing as survey responses, because re-running them requires
+paid model access and live endpoints.
+
+## Sample anchors
+
+Table \@ref(tab:fr-sample-anchors) reports, for every study on one axis, the raw
+entrant count, the number left after the equivocal-belief-window screen, the
+strict analytic sample, and the compliant subsample. The Studies 1--3 strict
+analytic samples are 1,092, 814, and 818; the Study 4 strict analytic sample is
+1,272, for a four-study analytic total of 3,996.
+
+```{r fr-sample-anchors}
+# Studies 1-3: raw / in-window / analytic from the screening funnel; compliant
+# (APE both-direction) computed from the analytic frame.
+s13_funnel <- all_numbers |>
+  dplyr::filter(section == "S1-3", block == "screening_funnel_s13",
+                term %in% c("raw_responses", "within_2575_window", "analytic_sample")) |>
+  dplyr::select(model, term, n) |>
+  tidyr::pivot_wider(names_from = term, values_from = n)
+s13_compliant <- core_objects$s13 |>
+  dplyr::group_by(study_factor) |>
+  dplyr::summarise(Compliant = sum(evaluator_label == 1 & reverse_evaluator_label == 1, na.rm = TRUE),
+                   .groups = "drop")
+s13_anchor <- s13_funnel |>
+  dplyr::left_join(s13_compliant, by = c("model" = "study_factor")) |>
+  dplyr::transmute(
+    Study = dplyr::recode(model, Jailbroken = "Study 1 (Jailbroken)",
+                          Standard = "Study 2 (Standard)",
+                          `Truth-Constrained` = "Study 3 (Truth-Constrained)"),
+    `Raw entrants` = raw_responses,
+    `In equivocal window` = within_2575_window,
+    `Strict analytic` = analytic_sample,
+    Compliant)
+
+# Study 4: raw / in-window / strict from the funnel; compliant from the analytic frame.
+s4_f <- all_numbers |>
+  dplyr::filter(section == "S4 + pooled", block == "funnel", sample == "strict_n1272") |>
+  dplyr::select(term, n)
+getn <- function(t) s4_f$n[s4_f$term == t]
+s4_anchor <- tibble::tibble(
+  Study = "Study 4 (4 frontier models)",
+  `Raw entrants` = getn("Raw Qualtrics respondent rows"),
+  `In equivocal window` = getn("Baseline belief in equivocal window (25 < belief < 75)"),
+  `Strict analytic` = getn("Post-conversation outcomes present"),
+  Compliant = nrow(core_objects$s4$s4_compliant))
+
+sample_anchor <- dplyr::bind_rows(s13_anchor, s4_anchor)
+si_kable_styled(sample_anchor, caption = "Analysis-sample sizes by study: raw entrants, respondents inside the equivocal 25-75 baseline window, the strict analytic sample, and the compliant subsample (Studies 1-3 compliant = APE-attempt in both directions; Study 4 compliant = APE first-turn attempt with no refusal, after the coverage-gap re-score).", digits = 0)
+```
+
+The full ordered screening funnel --- the cumulative pass counts at each gate and
+the mutually exclusive first-failure buckets, for all four studies --- is given in
+the Methods (Section \@ref(sample-construction-and-screening)).
+
+## Ethics and preregistration
+
+All studies were conducted under the manuscript's stated human-subjects
+approvals and informed-consent procedures. Three of the four studies were
+preregistered on AsPredicted:
+
+- **Study 1** (Jailbroken GPT-4o): AsPredicted #218585 (registered 2025-03-20).
+- **Study 2** (Standard GPT-4o): AsPredicted #224184 (registered 2025-04-21).
+- **Study 4** (four frontier models): AsPredicted #282517 (registered 2026-03-31).
+  As disclosed in that registration, the document was finalized before data
+  collection but submitted to AsPredicted after collection had begun.
+- **Study 3** (Truth-Constrained GPT-4o) was **not preregistered**; all Study 3
+  analyses are therefore exploratory.
+
+- All four studies, including Study 4's four-model extension and public-posting
+  tasks, are covered by MIT COUHES protocol E-6485 (exempt determination).
+
+## Deviations from preregistration
+
+The registered confirmatory analyses, and where the supplement departs from them,
+are as follows.
+
+**Registered confirmatory tests.** Study 1 registered the debunking effect as
+confirmatory (the bunking effect was registered as exploratory), to be estimated
+with the Lin (2013) baseline-interacted estimator and HC2 robust standard errors.
+Study 2 registered a symmetric prediction (bunking and debunking move belief by
+equal magnitudes), to be estimated by an ANCOVA of post-treatment belief on
+condition controlling for baseline, with robust standard errors. Study 4
+registered, as confirmatory, that the bunking-versus-debunking asymmetry varies
+across models and that the public-post outcomes move in the assigned direction,
+to be estimated by OLS of each direction-aligned outcome on
+direction $\times$ model with robust standard errors.
+
+**Estimator harmonization.** The supplement reports the Studies 1--3 belief
+contrasts with a common baseline-adjusted ANCOVA --- direction-aligned belief change
+regressed on condition and the pre-treatment belief rating (additive, with no
+condition-by-baseline interaction) --- and HC3 robust standard errors, so the three
+GPT-4o variants are estimated identically. This specification matches Study 2's
+registered ANCOVA. It departs from Study 1's registered Lin (2013) baseline-interacted
+estimator with HC2 standard errors, but the estimand (the baseline-adjusted
+bunking-minus-debunking contrast) is unchanged; because direction is randomized, the
+additive baseline term is a precision adjustment that leaves the unadjusted contrast
+magnitude essentially intact.
+
+**Exploratory analyses.** Beyond the registered tests above, the analyses in this
+supplement are exploratory. This includes **all of Study 3**, which was not
+preregistered; the compliant-subset (manipulation-delivered) estimates reported
+alongside the registered observed-outcome contrasts; the Study 3
+truth-constraint counterfactual; the pre-treatment
+moderator, topic-heterogeneity, claim-veracity, and durability
+analyses; and the cross-study pooled symmetry test. These are labeled as
+heterogeneity or robustness summaries rather than confirmatory estimands.
+
+**Sample and screening.** Realized
+analytic samples fell short of the recruitment targets (Study 1 target $\approx$
+1,500 valid, realized 1,092; Study 2 target 1,500, realized 814; Study 4 target
+2,400, realized 1,272), reflecting the attention/bot screen pass rates and, in
+Study 4, model-side delivery failures documented in the attrition analysis.

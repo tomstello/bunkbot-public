@@ -1,0 +1,221 @@
+# Pooled treatment-effect heterogeneity: causal forest
+
+As a pre-registered exploratory analysis (AsPredicted #218585, #224184; S3
+exploratory), we estimated treatment-effect heterogeneity with a causal forest
+(`grf`), here extended to **pool the compliant samples of all four studies**
+(*N* = `r fmt_n(est("cf_sample", term="n_total"))`; Studies 1--3
+*n* = `r fmt_n(est("cf_sample", term="n_s13"))`, Study 4
+*n* = `r fmt_n(est("cf_sample", term="n_s4"))`). Pooling Study 4 and the four
+frontier models into a forest was not itself pre-registered and is exploratory.
+
+Because no study includes a no-persuasion control arm, the causal contrast is
+**bunking versus debunking**: the forest treats assignment to bunk
+(*W* = 1; *n* = `r fmt_n(est("cf_sample", term="n_bunk"))`) versus debunk
+(*W* = 0; *n* = `r fmt_n(est("cf_sample", term="n_debunk"))`) as the treatment and
+the raw, orientation-corrected belief change *toward* the conspiracy (post minus
+pre) as the outcome. The resulting conditional average treatment effect (CATE) is
+the **bunk-minus-debunk swing** --- the total distance the AI moves a person's
+belief in whichever direction it is assigned, equal to the sum of that person's
+expected aligned movement under bunking and under debunking. Direction-aligned
+change cannot serve as the outcome here, because it already encodes the assigned
+arm in its sign. We entered every pre-treatment moderator measured in all four
+studies --- baseline belief; trust in, familiarity with, and frequency of using
+generative AI; party identification and the social and economic ideology items
+(coded 1 = very conservative to 5 = very liberal);
+religiosity; education; age; gender; and race --- plus generic conspiracist
+mentality (GCBS; Studies 1--3 only, handled by the forest's native
+missing-attribute splitting) and one-hot indicators for the seven study/model
+strata and the participant's conspiracy topic (the canonical 18-topic
+assignment; topics with fewer than `r fmt_n(40)` conversations and the
+"Mixed / Unclassified" residual are lumped). Continuous moderators were
+standardized within study/model; assignment
+propensities were fixed to the known within-cell randomization probabilities; the
+forest used honest splitting and `r fmt_n(4000)` trees.
+
+The forest recovered the expected average swing (AIPW ATE =
+`r fmt_num(est("cf_ate", term="ATE"), 1)` belief points, SE
+`r fmt_num(num("cf_ate", term="ATE")$se, 2)`, matching the unadjusted bunk-debunk
+gap of `r fmt_num(est("cf_ate", term="simple_gap"), 1)`) and detected substantial,
+statistically reliable heterogeneity around it: the calibration test's
+differential-forest-prediction coefficient was
+`r fmt_num(est("cf_calibration", term="differential.forest.prediction"), 2)`
+(SE `r fmt_num(num("cf_calibration", term="differential.forest.prediction")$se, 2)`,
+*p* `r fmt_p(pv("cf_calibration", term="differential.forest.prediction"))`),
+rejecting CATE homogeneity, and the honest-split AUTOC was
+`r fmt_num(est("cf_autoc", term="AUTOC"), 2)`
+(SE `r fmt_num(num("cf_autoc", term="AUTOC")$se, 2)`). Sorting participants by
+estimated CATE, the AIPW swing rose monotonically from
+`r fmt_num(est("cf_cate_quartile", term="Q1"), 1)` belief points in the
+least-movable quartile to `r fmt_num(est("cf_cate_quartile", term="Q4"), 1)` in the
+most-movable.
+
+```{r cf-blp-tab}
+cf_person_tab <- ALL_NUMBERS |>
+  dplyr::filter(.data$block == "cf_blp_person") |>
+  dplyr::mutate(
+    Moderator = unname(cf_mod_labels[.data$term]),
+    `Slope [95% CI]` = fmt_ci(.data$estimate, .data$conf_low, .data$conf_high, 2),
+    p = fmt_p(.data$p_value),
+    .abs = abs(.data$estimate)
+  ) |>
+  dplyr::arrange(dplyr::desc(.data$.abs)) |>
+  dplyr::select(Moderator, `Slope [95% CI]`, p)
+si_kable_styled(cf_person_tab, caption = "Best linear projection of the bunk-debunk swing on participant-level pre-treatment moderators. Slopes are in belief-scale points: per within-study SD for continuous moderators, and per category for binary moderators (female vs male, White vs other). Positive = a larger swing (more persuadable in whichever direction the AI argues). Generic conspiracist mentality (GCBS) is measured only in Studies 1-3 and projected on that subset.")
+```
+
+Among person-level traits (Table \@ref(tab:cf-blp-tab); Figure
+\@ref(fig:cf-blp-fig)), **trust in AI** was the strongest moderator
+(`r fmt_full(num("cf_blp_person", term="ai_trust"), 1, signed=TRUE)`): people who
+trust AI more are more movable in whichever direction it argues. Heavier **AI
+users** were more resistant
+(`r fmt_full(num("cf_blp_person", term="ai_use"), 1, signed=TRUE)`), as were the
+more **educated** (`r fmt_full(num("cf_blp_person", term="education"), 1, signed=TRUE)`);
+higher **baseline belief** attenuated the swing
+(`r fmt_full(num("cf_blp_person", term="baseline_belief"), 1, signed=TRUE)`).
+**Women** showed a larger swing than men
+(`r fmt_full(num("cf_blp_person", term="female"), 1, signed=TRUE)`). Generic
+conspiracist mentality (GCBS) was the most important splitting variable, with more
+conspiracy-minded participants somewhat harder to move overall
+(`r fmt_full(num("cf_blp_person", term="gcbs"), 1, signed=TRUE)`). Political
+identification, social and economic ideology, AI familiarity, race, religiosity,
+and age were not reliable moderators of the pooled swing.
+
+```{r cf-blp-fig, fig.width=7.2, fig.height=6, fig.cap="Best linear projection of the bunk-debunk swing (causal-forest CATE) on participant traits (top) and study/model context (bottom; reference = standard GPT-4o). Points are projection slopes with 95% confidence intervals; continuous traits are scaled per within-study SD. Coloured points are reliable at p < .05."}
+fig_cf_blp()
+```
+
+```{r cf-importance-fig, fig.width=7.2, fig.height=5, fig.cap="Causal-forest variable importance (split frequency) for the bunk-debunk swing. Person-level traits in blue, study/model context in amber, conspiracy-topic indicators in green. Conspiracy mentality (GCBS) and AI trust dominate; note that GCBS is missing for Study 4 and so partly proxies study membership (see the robustness forest)."}
+fig_cf_importance()
+```
+
+Heterogeneity by study and model reproduces the paper's headline contrasts in one
+framework (Figure \@ref(fig:cf-swing-fig)). Relative to standard GPT-4o, the swing
+was `r fmt_full(num("cf_blp_context", term="Truth-Constrained"), 1, signed=TRUE)`
+points under the truth constraint and indistinguishable when jailbroken
+(`r fmt_full(num("cf_blp_context", term="Jailbroken"), 1, signed=TRUE)`). Among
+frontier models the swing was substantially larger for Claude
+(`r fmt_full(num("cf_blp_context", term="Claude"), 1, signed=TRUE)`), Gemini
+(`r fmt_full(num("cf_blp_context", term="Gemini"), 1, signed=TRUE)`), and Grok
+(`r fmt_full(num("cf_blp_context", term="Grok"), 1, signed=TRUE)`), but smaller for
+GPT-5.2 (`r fmt_full(num("cf_blp_context", term="GPT-5.2"), 1, signed=TRUE)`), which
+essentially declined to bunk.
+
+```{r cf-swing-fig, fig.width=7.2, fig.height=4, fig.cap="Bunk-debunk swing by study and model (AIPW within-stratum treatment effect, 95% CI); the dashed line marks the pooled average. The three GPT-4o variants (Studies 1-3) and the four Study-4 frontier models are shown separately."}
+fig_cf_swing_by_model()
+```
+
+**Arm-specific structure.** Per-arm regression forests of aligned change clarify
+effects the swing can mask (descriptive, not causal). Baseline belief acts
+oppositely by arm --- a ceiling on bunking
+(`r fmt_full(num("cf_perarm", term="baseline_belief", direction="Bunking"), 1, signed=TRUE)`
+per SD) and a floor on debunking
+(`r fmt_full(num("cf_perarm", term="baseline_belief", direction="Debunking"), 1, signed=TRUE)`),
+so its modest net swing reflects partial cancellation. The female effect is a
+debunking effect
+(`r fmt_full(num("cf_perarm", term="female", direction="Debunking"), 1, signed=TRUE)`;
+bunking `r fmt_full(num("cf_perarm", term="female", direction="Bunking"), 1, signed=TRUE)`):
+women were more *debunkable*, not differentially bunkable.
+
+```{r cf-cate-fig, fig.width=8.5, fig.height=5, fig.cap="Distribution of the estimated bunk-debunk swing (CATE) across participants, by study and model. Mass to the right of zero indicates participants the AI can move toward its assigned position; the spread within each panel is the heterogeneity the forest detects."}
+fig_cf_cate_distribution()
+```
+
+## Which direction does the AI favor?
+
+The swing CATE is a magnitude --- how far a person can be moved in whichever
+direction the AI is assigned --- and does not by itself say whether *bunking* or
+*debunking* is the more effective lever for a given person. To recover direction we
+predict each participant's aligned change under each arm from a separate per-arm
+regression forest, and ask which is larger (descriptive, not a within-person causal
+contrast). Across the pooled sample the two levers are close to balanced:
+bunking is the stronger predicted lever for
+`r fmt_pct(est("cf_direction", model="Pooled", term="pct_favor_bunk"), 0)` of
+participants and debunking for the rest, mirroring the near-equal average aligned
+movement under the two arms
+(`r fmt_num(est("cf_direction", model="Pooled", term="bunk_aligned"),1)` vs
+`r fmt_num(est("cf_direction", model="Pooled", term="debunk_aligned"),1)` belief
+points). The balance shifts sharply by model (Figure \@ref(fig:cf-direction-fig)):
+bunking is favored for
+`r fmt_pct(est("cf_direction", model="Claude", term="pct_favor_bunk"), 0)` of Claude
+participants but only
+`r fmt_pct(est("cf_direction", model="GPT-5.2", term="pct_favor_bunk"), 0)` of
+GPT-5.2 participants --- GPT-5.2 is a much stronger debunker than bunker (its bunking
+backfires; observed aligned change
+`r fmt_num(est("cf_direction", model="GPT-5.2", term="bunk_aligned"),1)` bunking vs
+`r fmt_num(est("cf_direction", model="GPT-5.2", term="debunk_aligned"),1)`
+debunking).
+
+```{r cf-direction-fig, fig.width=9, fig.height=5.5, fig.cap="For each participant, the forest-predicted aligned effect of bunking (x) versus debunking (y), by study and model. Points below the dashed parity line are people for whom debunking is the stronger lever (blue); points above, bunking (pink). The Claude cloud sits largely below the line (bunkable), GPT-5.2 largely above (debunkable); the GPT-4o variants are mixed."}
+fig_cf_direction()
+```
+
+## Heterogeneity by conspiracy topic
+
+Entering the participant's conspiracy topic lets the swing vary by subject matter
+(Figure \@ref(fig:cf-topic-fig)). The swing is largest for the
+9/11 Inside Job conspiracy
+(`r fmt_num(est("cf_swing_by_topic", model="9/11 Inside Job Conspiracy", term="swing"),1)`
+belief points) and the deliberate-COVID-lab-release theory
+(`r fmt_num(est("cf_swing_by_topic", model="Deliberate COVID-19 Lab Release", term="swing"),1)`),
+both above the pooled average, and smallest for the Area 51 alien cover-up
+(`r fmt_num(est("cf_swing_by_topic", model="Area 51 Alien Cover-up", term="swing"),1)`)
+and election-fraud beliefs
+(`r fmt_num(est("cf_swing_by_topic", model="Election fraud conspiracy beliefs", term="swing"),1)`).
+The direction favored also tracks the topic: the Moon Landing Hoax is the most
+bunking-favored topic
+(`r fmt_pct(est("cf_swing_by_topic", model="Moon Landing Hoax", term="pct_favor_bunk"),0)`
+of its participants), consistent with the paper's truthful-ammunition account ---
+topics with little genuine real-world evidence are the ones an AI can most readily
+push *toward* the conspiracy.
+
+```{r cf-topic-fig, fig.width=7.2, fig.height=4, fig.cap="AIPW bunk-debunk swing by conspiracy topic (95% CI), for topics with at least 60 conversations; the dashed line is the pooled average. Topics with more genuine real-world ammunition (9/11, COVID-lab) show the largest swings."}
+fig_cf_swing_by_topic()
+```
+
+**Robustness.** Refitting on only the fully observed common covariates (dropping
+GCBS and the study/model indicators) left conclusions unchanged: ATE =
+`r fmt_num(est("cf_robustness", term="ATE"), 1)` belief points, and a
+differential-forest-prediction coefficient of
+`r fmt_num(est("cf_robustness", term="differential.forest.prediction"), 2)`
+(SE `r fmt_num(num("cf_robustness", term="differential.forest.prediction")$se, 2)`,
+*p* `r fmt_p(pv("cf_robustness", term="differential.forest.prediction"))`), so the
+person-level moderation is not an artifact of the forest's missing-data handling or
+of differences between the study/model strata.
+
+## Separate forests within each study group
+
+To read GCBS free of the pooled forest's missingness/study confound (it is absent
+in Study 4, so "GCBS missing" otherwise proxies study membership), and to check
+that the person-level pattern holds inside each design, we refit the forest
+*within* Studies 1--3 (GPT-4o variants; GCBS fully observed) and *within* Study 4
+(frontier models). Both groups retain clear heterogeneity (differential-forest-
+prediction = `r fmt_num(est("cf_sub_calibration", sample="compliant_s1s3", term="differential.forest.prediction"), 2)`,
+*p* `r fmt_p(pv("cf_sub_calibration", sample="compliant_s1s3", term="differential.forest.prediction"))`
+in Studies 1--3; `r fmt_num(est("cf_sub_calibration", sample="compliant_s4", term="differential.forest.prediction"), 2)`,
+*p* `r fmt_p(pv("cf_sub_calibration", sample="compliant_s4", term="differential.forest.prediction"))`
+in Study 4), with a larger average swing in Study 4
+(`r fmt_num(est("cf_sub_ate", sample="compliant_s4", term="ATE"), 1)` vs
+`r fmt_num(est("cf_sub_ate", sample="compliant_s1s3", term="ATE"), 1)` belief points).
+
+The split confirms the GCBS caveat directly: with GCBS observed for every
+participant, its variable importance falls to
+`r fmt_num(est("cf_sub_importance", sample="compliant_s1s3", term="gcbs"), 3)`
+within Studies 1--3 (third behind AI trust and economic ideology), far below its
+inflated pooled value of
+`r fmt_num(est("cf_importance", term="gcbs"), 3)`, and its linear association with
+the swing is modest and only marginal
+(`r fmt_full(num("cf_sub_blp_person", sample="compliant_s1s3", term="gcbs"), 1, signed=TRUE)`).
+The headline AI-receptivity axis, by contrast, replicates *independently* in both
+designs: higher AI trust predicts a larger swing
+(`r fmt_full(num("cf_sub_blp_person", sample="compliant_s1s3", term="ai_trust"), 1, signed=TRUE)`
+in Studies 1--3;
+`r fmt_full(num("cf_sub_blp_person", sample="compliant_s4", term="ai_trust"), 1, signed=TRUE)`
+in Study 4) and heavier AI use a smaller one
+(`r fmt_full(num("cf_sub_blp_person", sample="compliant_s4", term="ai_use"), 1, signed=TRUE)`
+in Study 4). The female effect is carried by Studies 1--3
+(`r fmt_full(num("cf_sub_blp_person", sample="compliant_s1s3", term="female"), 1, signed=TRUE)`)
+and is not reliable within Study 4's smaller sample.
+
+```{r cf-subgroup-fig, fig.width=7.2, fig.height=5, fig.cap="Person-trait moderators of the bunk-debunk swing, from forests fit separately within Studies 1-3 (blue) and within Study 4 (pink), with 95% confidence intervals. GCBS (conspiracy mentality) appears only for Studies 1-3, where it is measured. The AI-trust (positive) and AI-use (negative) effects replicate across both designs."}
+fig_cf_subgroup_blp()
+```

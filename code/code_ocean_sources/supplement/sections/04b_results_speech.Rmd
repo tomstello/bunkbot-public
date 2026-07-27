@@ -1,0 +1,878 @@
+## Claim Veracity and Claim Counts
+
+Veracity measures *what the model said*, as distinct from the belief outcomes
+that measure *what participants concluded*. Every assistant message is decomposed
+into atomic factual claims; each claim is assigned a substantive/non-substantive
+role and a directional alignment relative to the assigned persuasive goal; and the
+substantive claims are fact-checked on a 0 (false) to 100 (true) scale. Four counts
+are distinct: *all* extracted claims (every atomic proposition, including
+procedural, rhetorical, and conversational filler), the *fact-checked* subset, the
+*substantive* checkable subset, and the *direction-aligned* subset whose stance
+supports the position the model was assigned to argue. Claim extraction was run on
+the full recorded conversations of **all four studies**, so the raw pre-substantive
+extracted total is reported for every study: across the four studies the AI
+produced
+`r fmt_n(est("claim_counts_full", sample = "cached_api_claims", model = "Study1", direction = NA, term = "n_total_claims") + est("claim_counts_full", sample = "cached_api_claims", model = "Study2", direction = NA, term = "n_total_claims") + est("claim_counts_full", sample = "cached_api_claims", model = "Study3", direction = NA, term = "n_total_claims") + est("claim_counts_full", sample = "s4_master_codebook", model = "Study4", direction = NA, term = "n_total_claims"))`
+extracted atomic propositions, of which a far smaller share are *substantive*
+position-taking claims (the basis for the reported veracity).
+
+### What kinds of claims were checked
+
+Table \@ref(tab:rb-claim-counts) reports the full claim census --- all extracted,
+fact-checked, substantive, and direction-aligned counts for all four studies,
+broken down by study, by Study-4 model, and by assigned condition. Table
+\@ref(tab:rb-claim-prevalence) reports the corresponding role and category shares.
+Across the four studies,
+`r fmt_pct(est("claim_prevalence", sample="cached_api_claims", model="(all)", term="share_substantive"), 1)`
+of fact-checked claims are substantive and
+`r fmt_pct(est("claim_prevalence", sample="cached_api_claims", model="(all)", term="share_aligned"), 1)`
+are aligned with the assigned side; among substantive claims,
+`r fmt_pct(est("claim_prevalence", sample="cached_api_claims", model="(all)", term="share_substantive_indirect"), 1)`
+supply *indirect* supporting evidence rather than directly asserting the focal
+proposition. The substantive share is highest in Study 4
+(`r fmt_pct(est("claim_prevalence", sample="cached_api_claims", model="Study4", term="share_substantive"), 1)`)
+and lowest in the Truth-Constrained study
+(`r fmt_pct(est("claim_prevalence", sample="cached_api_claims", model="Study3", term="share_substantive"), 1)`).
+
+```{r rb-claim-counts}
+ccf_lab <- all_numbers |>
+  dplyr::filter(section == "Veracity", block == "claim_counts_full",
+                sample == "cached_api_claims",
+                term %in% c("n_factchecked", "n_substantive", "n_aligned")) |>
+  dplyr::transmute(model, direction, term, estimate)
+ccf_tot <- all_numbers |>
+  dplyr::filter(section == "Veracity", block == "claim_counts_full",
+                term == "n_total_claims",
+                # S1-3 all-extracted from the per-study extraction files; S4 + models from the master census
+                (sample == "cached_api_claims" & model %in% c("Study1","Study2","Study3")) |
+                (sample == "s4_master_codebook" & model %in% c("Study4","Claude","Gemini","GPT-5.2","Grok"))) |>
+  dplyr::transmute(model, direction, term = "n_total", estimate)
+# all-studies total = sum of the four study-level extracted counts
+ccf_tot <- dplyr::bind_rows(
+  ccf_tot,
+  ccf_tot |> dplyr::filter(is.na(direction), model %in% c("Study1","Study2","Study3","Study4")) |>
+    dplyr::summarise(model = "(all)", direction = NA_character_, term = "n_total",
+                     estimate = sum(estimate)))
+claim_counts <- dplyr::bind_rows(ccf_tot, ccf_lab) |>
+  tidyr::pivot_wider(names_from = term, values_from = estimate) |>
+  dplyr::mutate(
+    Group = dplyr::recode(model,
+              Study1 = "S1 (Jailbroken)", Study2 = "S2 (Standard)",
+              Study3 = "S3 (Truth-Constrained)", Study4 = "S4 (all models)",
+              `(all)` = "All studies"),
+    Condition = dplyr::recode(dplyr::coalesce(direction, "all"),
+              bunk = "Bunk", debunk = "Debunk", all = "All"),
+    .grp = dplyr::case_when(
+      model == "(all)" ~ 0L,
+      model %in% c("Study1","Study2","Study3","Study4") & Condition == "All" ~ 1L,
+      model %in% c("Claude","Gemini","GPT-5.2","Grok") ~ 2L,
+      TRUE ~ 3L),
+    .ord = match(model, c("(all)","Study1","Study2","Study3","Study4",
+                          "Claude","Gemini","GPT-5.2","Grok")),
+    `All extracted` = ifelse(is.na(n_total), "—", fmt_n(n_total)),
+    `Fact-checked`  = fmt_n(n_factchecked),
+    `Substantive`   = fmt_n(n_substantive),
+    `Aligned`       = fmt_n(n_aligned)) |>
+  dplyr::arrange(.grp, .ord, Condition) |>
+  dplyr::select(Group, Condition, `All extracted`, `Fact-checked`,
+                `Substantive`, `Aligned`)
+si_kable_styled(claim_counts, caption = "Full claim census, by study, by Study-4 model, and by assigned condition: all extracted atomic claims, the fact-checked subset, the substantive (position-taking, checkable) subset, and the direction-aligned subset used for the reported veracity average. All four counts are computed on the analytic conversation universe for each study. 'All extracted' is the raw pre-substantive census from the claim-extraction stage (Studies 1-3 from the per-study extraction files; Study 4 from the master codebook restricted to the analytic sample); the fact-checked, substantive, and aligned columns are the harmonized fact-check label set on the same conversations. The two stages are parallel measures over a shared set of conversations rather than a strictly nested subset, so 'All extracted' bounds but does not exactly enclose the downstream columns.")
+```
+
+```{r rb-claim-prevalence}
+cp <- all_numbers |>
+  dplyr::filter(block == "claim_prevalence", sample == "cached_api_claims",
+                term %in% c("n_factchecked_claims", "share_substantive", "share_aligned",
+                            "share_substantive_supports", "share_substantive_direct")) |>
+  dplyr::select(model, term, estimate) |>
+  tidyr::pivot_wider(names_from = term, values_from = estimate) |>
+  dplyr::mutate(
+    .ord = match(model, c("Study1", "Study2", "Study3", "Study4", "(all)")),
+    Study = dplyr::recode(model,
+              Study1 = "S1 (Jailbroken)", Study2 = "S2 (Standard)",
+              Study3 = "S3 (Truth-Constrained)", Study4 = "S4 (frontier models)",
+              `(all)` = "All studies"),
+    `Fact-checked claims` = fmt_n(n_factchecked_claims),
+    `% substantive` = fmt_pct(share_substantive, 1),
+    `% aligned` = fmt_pct(share_aligned, 1),
+    `% supports (of subst.)` = fmt_pct(share_substantive_supports, 1),
+    `% direct (of subst.)` = fmt_pct(share_substantive_direct, 1)) |>
+  dplyr::arrange(.ord) |>
+  dplyr::select(Study, `Fact-checked claims`, `% substantive`, `% aligned`,
+                `% supports (of subst.)`, `% direct (of subst.)`)
+si_kable_styled(cp, caption = "Claim-role prevalence among fact-checked claims, by study and overall: the share that is substantive (takes a checkable position on the focal proposition), the share aligned with the assigned side (the veracity denominator), and, among substantive claims, the supports and direct shares.")
+```
+
+Veracity is aggregated to the conversation level before any study/model summary
+is formed, so that a long conversation with many extracted claims cannot
+dominate the average. The default aligned-veracity measure pools direct claims
+about the focal proposition with indirect supporting evidence (institutional
+incentives, alleged anomalies, historical precedents) whenever the claim's
+stance supports the assigned direction. Table \@ref(tab:rb-veracity) reports the
+mean aligned veracity by study/model and direction.
+
+```{r rb-veracity}
+vera <- all_numbers |>
+  dplyr::filter(section == "Veracity", block == "table_aligned_veracity",
+                term == "aligned_veracity") |>
+  dplyr::mutate(Direction = dplyr::recode(direction, bunk = "Bunk", debunk = "Debunk"),
+                Conversations = n,
+                `Mean aligned veracity` = fmt_num(estimate, 1)) |>
+  dplyr::select(`Study / model` = model, Direction, Conversations,
+                `Mean aligned veracity`)
+si_kable_styled(vera, caption = "Mean veracity (0 = false, 100 = true) of substantive direction-aligned claims, by study/model and assigned direction. Conversations is the number of conversations contributing at least one aligned claim; veracity is aggregated to the conversation level before averaging.")
+```
+
+```{r rb-fig-veracity, fig.cap="Mean veracity of substantive claims aligned with the assigned persuasive direction, by study, model, and direction."}
+fig_veracity()
+```
+
+The mean conceals the tail: even where average aligned veracity is high, a
+non-trivial fraction of individual claims are scored as predominantly false. Table
+\@ref(tab:rb-veracity-tail) reports, for each study and assigned direction, the
+share of fact-checkable claims falling into successively lower veracity bands
+(below 10, below 20, and below a more-false-than-true cutoff of 40) for both the
+direction-aligned (headline) and all fact-checked claim sets for Studies 1-3. The
+low-veracity tail is heavier under bunking than debunking. In Study 4 it is also
+strongly model-dependent, so rather than collapse the four frontier models into a
+single Study-4 cell we report the Study-4 tail rates per model in Table
+\@ref(tab:rb-veracity-tail-s4models), where the high-volume Grok conversations and
+the near-fully veridical GPT-5.2 conversations are kept distinct.
+
+```{r rb-veracity-tail}
+vt <- all_numbers |>
+  dplyr::filter(section == "Veracity", block == "veracity_tail",
+                sample == "strict_claims",
+                model %in% c("Study1", "Study2", "Study3")) |>
+  dplyr::select(outcome, model, direction, term, estimate) |>
+  tidyr::pivot_wider(names_from = term, values_from = estimate) |>
+  dplyr::mutate(
+    `Claim set` = dplyr::recode(outcome, aligned = "Aligned (headline)",
+                                substantive = "All fact-checked"),
+    Study = dplyr::recode(model, Study1 = "S1 (Jailbroken)", Study2 = "S2 (Standard)",
+                          Study3 = "S3 (Truth-Constrained)"),
+    Direction = dplyr::recode(direction, bunk = "Bunk", debunk = "Debunk"),
+    .csord = match(outcome, c("aligned", "substantive")),
+    .stord = match(model, c("Study1", "Study2", "Study3")),
+    `n claims` = scales::comma(n_claims),
+    `Mean veracity` = fmt_num(mean_veracity, 1),
+    `% < 10` = fmt_num(p_lt10, 1), `% < 20` = fmt_num(p_lt20, 1),
+    `% < 40` = fmt_num(p_lt40, 1)) |>
+  dplyr::arrange(.csord, .stord, Direction) |>
+  dplyr::select(`Claim set`, Study, Direction, `n claims`,
+                `Mean veracity`, `% < 10`, `% < 20`, `% < 40`)
+si_kable_styled(vt, caption = "Low-veracity tail rates of the persuader's fact-checkable claims, for Studies 1-3, by assigned direction, for the direction-aligned (headline) and all fact-checked claim sets. Veracity is the per-claim fact-check score (0 = false, 100 = true), clipped to 0-100. '% < k' is the share of claims scoring below k; the low-veracity cutoff is 40 (a generous more-false-than-true threshold). Study 4 is reported per frontier model in the next table rather than as a single pooled cell, because the tail rates differ sharply across the four models.")
+```
+
+```{r rb-veracity-tail-s4models}
+vt4 <- all_numbers |>
+  dplyr::filter(section == "Veracity", block == "veracity_tail",
+                sample == "strict_claims", grepl("^Study4_", model)) |>
+  dplyr::select(outcome, model, direction, term, estimate) |>
+  tidyr::pivot_wider(names_from = term, values_from = estimate) |>
+  dplyr::mutate(
+    `Claim set` = dplyr::recode(outcome, aligned = "Aligned (headline)",
+                                substantive = "All fact-checked"),
+    Model = sub("^Study4_", "", model),
+    Direction = dplyr::recode(direction, bunk = "Bunk", debunk = "Debunk"),
+    .csord = match(outcome, c("aligned", "substantive")),
+    .mord = match(Model, c("Claude", "Gemini", "GPT-5.2", "Grok")),
+    `n claims` = scales::comma(n_claims),
+    `Mean veracity` = fmt_num(mean_veracity, 1),
+    `% < 10` = fmt_num(p_lt10, 1), `% < 20` = fmt_num(p_lt20, 1),
+    `% < 40` = fmt_num(p_lt40, 1)) |>
+  dplyr::arrange(.csord, .mord, Direction) |>
+  dplyr::select(`Claim set`, Model, Direction, `n claims`,
+                `Mean veracity`, `% < 10`, `% < 20`, `% < 40`)
+si_kable_styled(vt4, caption = "Study-4 low-veracity tail rates by frontier model and assigned direction (claim-pooled within model), for the aligned (headline) and all fact-checked claim sets. Same metrics and cutoff as the previous table. The wide spread across models (GPT-5.2 near-fully veridical versus Grok largely low-veracity) is why Study 4 is reported per model here rather than collapsed into a single pooled cell.")
+```
+
+## Veracity Versus Persuasion
+
+A central interpretive question is whether more truthful arguments are more
+persuasive. We answer it at two levels of aggregation, because the two levels
+can disagree. At the *cross-cell* (ecological) level, each study/model-by-direction
+cell contributes one point: its mean aligned veracity and its mean belief change.
+At the *within-model* level, the unit is the individual conversation, and we ask
+whether a participant exposed to more truthful aligned claims moved more.
+
+```{r rb-veracity-corr}
+vbc <- all_numbers |>
+  dplyr::filter(section == "S4 + pooled", block == "veracity_belief_correlations",
+                sample %in% c("strict_n1272", "compliant_n1073"), term == "pearson_r") |>
+  dplyr::mutate(Sample = dplyr::recode(sample,
+                  strict_n1272 = "Observed outcomes", compliant_n1073 = "Compliant"),
+                `r [95% CI]` = fmt_ci(estimate, conf_low, conf_high, 2),
+                p = fmt_p(p_value)) |>
+  dplyr::arrange(model, direction, dplyr::desc(Sample)) |>
+  dplyr::select(Model = model, Direction = direction, Sample, n, `r [95% CI]`, p)
+si_kable_styled(vbc, caption = "Within-cell Pearson correlation between conversation-level aligned-claim veracity and direction-aligned belief change (Study 4), in the strict and compliant samples.", digits = 2)
+```
+
+```{r rb-fig-veracity-persuasion, fig.cap="Cross-cell (ecological) relationship between mean aligned-claim veracity and mean direction-aligned belief change. Each point is one Study-4 model-by-direction cell. Both the observed-outcome and compliant samples are shown, faceted side by side (Observed outcomes | Compliant)."}
+fig_veracity_persuasion()
+```
+
+### Paltering: bunking persuades even with accurate claims
+
+A sharper version of the same question asks whether bunking still moves belief when
+the conversation's claims are accurate. Restricting to *compliant bunking*
+conversations pooled across all four studies, Figure \@ref(fig:rb-fig-paltering) plots
+each conversation's belief change against its average aligned-claim veracity. Belief
+change declines only gently with veracity and remains clearly positive through the
+high-veracity range (the veracity-octile means stay near +8 points even above 75/100)
+-- i.e., bunking persuades in part by *paltering*, marshalling accurate claims toward
+a misleading conclusion, rather than depending on outright falsehoods.
+
+```{r rb-fig-paltering, fig.width=7.2, fig.height=4.4, fig.cap="Belief change versus conversation-average aligned-claim veracity for compliant bunking conversations, pooled across Studies 1-4. Grey points are conversations; white points are veracity-octile means with 95% CIs; the band is a loess smooth. Belief change stays positive even where the conversation's claims are highly accurate."}
+fig_paltering()
+```
+
+## Topic Heterogeneity
+
+Because each participant selects an individualized focal conspiracy, persuasion
+effects can concentrate in recognizable conspiracy families. Table \@ref(tab:rb-topic) reports, for
+each adequately covered topic, an HC3 regression contrast of bunking-minus-debunking
+aligned belief change with a 95% confidence interval, alongside the model-implied
+per-condition means. The clearest pattern is that topics with abundant genuine
+real-world ambiguity (e.g., 9/11, COVID lab origin) sustain large bunking gains,
+whereas a near-physically-settled topic such as the moon-landing hoax is close to
+unbunkable: its bunking mean is
+`r fmt_est_ci(num("topic_contrasts", sample="strict", model="Moon Landing Hoax", direction="Bunking", term="topic_mean_aligned_change"), 1)`,
+versus
+`r fmt_est_ci(num("topic_contrasts", sample="strict", model="9/11 Inside Job Conspiracy", direction="Bunking", term="topic_mean_aligned_change"), 1)`
+for 9/11.
+
+```{r rb-topic}
+tc_contrast <- all_numbers |>
+  dplyr::filter(section == "Topic", block == "topic_contrasts", sample == "strict",
+                term == "bunk_vs_debunk_contrast") |>
+  dplyr::transmute(Topic = model, n,
+                   `Bunk − debunk [95% CI]` = fmt_ci(estimate, conf_low, conf_high, 1),
+                   p = fmt_p(p_value), .ord = estimate)
+tc_means <- all_numbers |>
+  dplyr::filter(section == "Topic", block == "topic_contrasts", sample == "strict",
+                term == "topic_mean_aligned_change") |>
+  dplyr::mutate(Direction = dplyr::recode(direction, Bunking = "bunk_m", Debunking = "debunk_m"),
+                cell = fmt_ci(estimate, conf_low, conf_high, 1)) |>
+  dplyr::select(Topic = model, Direction, cell) |>
+  tidyr::pivot_wider(names_from = Direction, values_from = cell)
+topic_tab <- tc_contrast |>
+  dplyr::left_join(tc_means, by = "Topic") |>
+  dplyr::arrange(.ord) |>
+  dplyr::transmute(Topic, n,
+                   `Bunk mean [95% CI]` = bunk_m,
+                   `Debunk mean [95% CI]` = debunk_m,
+                   `Bunk − debunk [95% CI]`, p)
+si_kable_styled(topic_tab, caption = "Topic-specific HC3 bunk-minus-debunk regression contrast of direction-aligned belief change, with model-implied per-condition means, pooled across all four studies (embedding-based topic grouping; exploratory; adequately covered topics only).")
+```
+
+```{r rb-fig-topic, fig.height=6.4, fig.cap="Topic-specific bunk-minus-debunk regression contrast of direction-aligned belief change with HC3 95% confidence intervals, ordered by the strict-sample contrast (exploratory). Both the observed-outcome and compliant samples are shown (dodged); topics retained only where both conditions have adequate coverage in that sample."}
+fig_topic_contrasts()
+```
+
+Topics differ not only in how persuadable they are but in how *truthful* the
+persuader's claims are. Figure \@ref(fig:rb-fig-topic-veracity) reports the mean
+direction-aligned claim veracity within each conspiracy topic cluster, separately
+by arm and for both samples. Debunking claims are uniformly high-veracity, whereas
+bunking veracity varies sharply by topic --- reflecting how much genuinely
+suspicious real-world material a given conspiracy affords --- which is the
+claim-level signature behind the topic heterogeneity in persuasion above.
+
+```{r rb-fig-topic-veracity, fig.width=8, fig.height=6.4, fig.cap="Mean direction-aligned claim veracity (0-100, 95% CI) by conspiracy topic cluster and assigned direction, pooled across studies, on the all-conversations and compliant samples (faceted). Topics are ordered by the debunk-minus-bunk veracity gap; only clusters with sufficient conversations are shown."}
+fig_topic_veracity()
+```
+
+## Public Speech
+
+Study 4 added a public-speech battery so that persuasion could be measured not
+only as private belief but as expressed, shareable content.
+
+Table \@ref(tab:rb-prereg) reports the weighted-sharing test alongside the other
+public-speech contrasts (post stance, sharing likelihood, and private belief for
+reference), equal-weighted across the four models with HC3 standard errors, from
+the **baseline-adjusted** models (a disclosed precision deviation from the
+registration). The registered specification itself — unadjusted OLS on the
+direction-aligned change scores — is reported in Table
+\@ref(tab:rb-prereg-aligned). The equal-model-weighted pooled contrast is the one
+place a single pooled Study-4 number is the headline; everywhere else Study 4 is
+reported per model. The effect on weighted sharing is large and directional: the
+conversation moves not just belief but the content people would broadcast.
+
+```{r rb-prereg}
+prereg <- all_numbers |>
+  dplyr::filter(section == "S4 + pooled", block == "prereg_primary",
+                sample %in% c("strict_n1272", "compliant_n1073"),
+                term == "avg_bunk_minus_debunk") |>
+  dplyr::mutate(Sample = dplyr::recode(sample,
+                  strict_n1272 = "Observed outcomes", compliant_n1073 = "Compliant"),
+                Outcome = dplyr::recode(outcome,
+                  weighted_share = "Weighted sharing (registered primary)",
+                  post_stance = "Post stance",
+                  share_likelihood = "Sharing likelihood",
+                  belief = "Private belief"),
+                .ord = match(outcome,
+                  c("weighted_share", "post_stance", "share_likelihood", "belief")),
+                `Bunk - debunk [95% CI]` = fmt_ci(estimate, conf_low, conf_high, 2),
+                p = fmt_p(p_value)) |>
+  dplyr::arrange(.ord, dplyr::desc(Sample)) |>
+  dplyr::select(Outcome, Sample, n, `Bunk - debunk [95% CI]`, p)
+si_kable_styled(prereg, caption = "Study 4 public-speech and belief contrasts, equal-weighted across the four models (HC3), in the strict and compliant samples. Baseline-adjusted specification (a disclosed precision deviation from the registered unadjusted model; the registered specification is reported in the direction-aligned table below). p is the HC3 t test of the equal-weighted contrast. Per-model breakdowns are reported in the adjacent tables.", digits = 2)
+```
+
+Table \@ref(tab:rb-prereg-model) disaggregates the registered family by model
+family, reporting the bunk-minus-debunk contrast on each registered outcome for
+Claude, Gemini, GPT-5.2, and Grok (strict and compliant samples). The registered
+weighted-sharing effect is large and reliable for Claude, Gemini, and Grok but
+small and---in the strict sample---non-significant for GPT-5.2, mirroring that
+model's bunking defection; under the compliant sample, where only delivered
+GPT-5.2 bunking conversations remain, the GPT-5.2 weighted-sharing contrast turns
+positive and significant.
+
+```{r rb-prereg-model}
+pregm <- all_numbers |>
+  dplyr::filter(section == "S4 + pooled", block == "prereg_primary_model_contrasts",
+                sample %in% c("strict_n1272", "compliant_n1073")) |>
+  dplyr::mutate(Sample = dplyr::recode(sample,
+                  strict_n1272 = "Observed outcomes", compliant_n1073 = "Compliant"),
+                Outcome = dplyr::recode(outcome,
+                  weighted_share = "Weighted sharing",
+                  post_stance = "Post stance",
+                  share_likelihood = "Sharing likelihood",
+                  belief = "Private belief"),
+                .ord = match(outcome,
+                  c("weighted_share", "post_stance", "share_likelihood", "belief")),
+                `Bunk - debunk [95% CI]` = fmt_ci(estimate, conf_low, conf_high, 2),
+                p = fmt_p(p_value)) |>
+  dplyr::arrange(.ord, dplyr::desc(Sample), model) |>
+  dplyr::select(Outcome, Sample, Model = model, n, `Bunk - debunk [95% CI]`, p)
+si_kable_styled(pregm, caption = "Study 4 public-speech and belief contrasts by model family (baseline-adjusted bunk-minus-debunk; strict and compliant samples). n is the per-model estimation sample (both arms).", digits = 2)
+```
+
+Table \@ref(tab:rb-prereg-aligned) reports the registered (AsPredicted #282517)
+specification verbatim: unadjusted OLS of each direction-aligned outcome on
+direction x model, HC3, among all observed-outcome participants regardless of
+compliance, with positive values meaning movement
+toward the assigned direction. It includes the joint and direction-by-model
+interaction tests recorded in the registration, making the registered
+model-difference test—the omnibus HC3 F of the direction-by-model term—explicit
+alongside the average contrast.
+
+```{r rb-prereg-aligned}
+prereg2 <- all_numbers |>
+  dplyr::filter(section == "S4 + pooled", block == "prereg_registered_tests",
+                sample == "strict_n1272") |>
+  dplyr::mutate(`Estimate [95% CI]` = ifelse(is.na(estimate), "—",
+                  fmt_ci(estimate, conf_low, conf_high, 2)),
+                p = fmt_p(p_value),
+                Term = dplyr::recode(term,
+                  avg_debunk_minus_bunk = "Avg debunk − bunk",
+                  direction_joint_F = "Joint direction F",
+                  direction_x_model_interaction = "Direction × model F")) |>
+  dplyr::select(Outcome = outcome, Term, n, `Estimate [95% CI]`, p)
+si_kable_styled(prereg2, caption = "Study 4 registered direction-aligned tests (equal-model-weighted pooled estimand, the pre-registered analysis) with joint and direction-by-model omnibus F-tests.", digits = 2)
+```
+
+### Missing-outcome analyses among confirmed chat starters {#chat-started-speech}
+
+The registered speech analyses above use the 1,272 records with the complete
+outcome battery. The missing-outcome analysis instead conditions only on confirmed
+chat start ($N=1{,}353$). The 81 added baseline posts were passed through the same
+three-rater orientation audit and five-rater stance pipeline as the original
+analysis. Post stance, revised-post sharing, and original-post sharing are jointly
+imputed with post belief in the MAR analysis; no compliant-subset, mechanism,
+trust, perception, debrief, compliance, or claim-veracity outcome is imputed.
+
+Table \@ref(tab:rb-chat-started-continuous-cells) reports model-by-direction
+effects for weighted sharing, post stance, and willingness to re-share the
+original post. Feasible-value bounds use $-50$ to $50$ for post weighted sharing,
+0--100 for post stance, and each participant's baseline stance combined with a
+0--100 original-post sharing rating.
+
+```{r rb-chat-started-continuous-cells}
+s4s_cells <- all_numbers |>
+  dplyr::filter(block == "s4_chat_started_cell_effects",
+                sample == "chat_started_n1353",
+                outcome %in% c("aligned_new_minus_old_weighted",
+                               "aligned_stance_change",
+                               "aligned_original_post_share_change")) |>
+  dplyr::mutate(
+    Outcome = dplyr::recode(outcome,
+      aligned_new_minus_old_weighted = "Weighted sharing",
+      aligned_stance_change = "Post stance",
+      aligned_original_post_share_change = "Original-post sharing"),
+    Approach = dplyr::recode(term,
+      available_outcomes = "Available outcomes",
+      zero_change = "Zero change",
+      mi_mar = "MAR imputation",
+      support_bounds = "Feasible bounds"),
+    value = dplyr::if_else(term == "support_bounds",
+      paste0("[", fmt_num(conf_low, 1), ", ", fmt_num(conf_high, 1), "]"),
+      fmt_ci(estimate, conf_low, conf_high, 1)),
+    .o = match(outcome, c("aligned_new_minus_old_weighted",
+                          "aligned_stance_change",
+                          "aligned_original_post_share_change")),
+    .m = match(model, c("Claude", "Gemini", "GPT-5.2", "Grok")),
+    Direction = dplyr::recode(direction, bunk = "Bunk", debunk = "Debunk")
+  ) |>
+  dplyr::arrange(.o, .m, Direction) |>
+  dplyr::select(Outcome, Model = model, Direction, Approach, value) |>
+  tidyr::pivot_wider(names_from = Approach, values_from = value)
+si_kable_styled(
+  s4s_cells,
+  caption = "Registered continuous public-speech effects by Study 4 model and direction among 1,353 confirmed chat starters. Point estimates are reported with 95% CIs; feasible-value bounds are identification intervals. Available-outcome N = 1,272."
+)
+```
+
+```{r rb-chat-started-continuous-contrasts}
+s4s_contrasts <- all_numbers |>
+  dplyr::filter(block == "s4_chat_started_model_contrasts",
+                sample == "chat_started_n1353",
+                outcome %in% c("aligned_new_minus_old_weighted",
+                               "aligned_stance_change",
+                               "aligned_original_post_share_change")) |>
+  dplyr::mutate(
+    Outcome = dplyr::recode(outcome,
+      aligned_new_minus_old_weighted = "Weighted sharing",
+      aligned_stance_change = "Post stance",
+      aligned_original_post_share_change = "Original-post sharing"),
+    Approach = dplyr::recode(term,
+      available_outcomes = "Available outcomes",
+      zero_change = "Zero change",
+      mi_mar = "MAR imputation",
+      support_bounds = "Feasible bounds"),
+    value = dplyr::if_else(term == "support_bounds",
+      paste0("[", fmt_num(conf_low, 1), ", ", fmt_num(conf_high, 1), "]"),
+      paste0(fmt_ci(estimate, conf_low, conf_high, 1), "; p ", fmt_p(p_value))),
+    .o = match(outcome, c("aligned_new_minus_old_weighted",
+                          "aligned_stance_change",
+                          "aligned_original_post_share_change")),
+    .m = match(model, c("Claude", "Gemini", "GPT-5.2", "Grok"))
+  ) |>
+  dplyr::arrange(.o, .m) |>
+  dplyr::select(Outcome, Model = model, Approach, value) |>
+  tidyr::pivot_wider(names_from = Approach, values_from = value)
+si_kable_styled(
+  s4s_contrasts,
+  caption = "Within-model debunk-minus-bunk asymmetries for the registered continuous public-speech outcomes among confirmed chat starters. Positive values favor debunking; point rows give estimate [95% CI] and p."
+)
+```
+
+```{r rb-chat-started-registered-tests}
+s4s_reg <- all_numbers |>
+  dplyr::filter(block == "s4_chat_started_registered_tests",
+                sample == "chat_started_n1353") |>
+  dplyr::mutate(
+    Outcome = dplyr::recode(outcome,
+      aligned_belief_change = "Focal belief",
+      aligned_new_minus_old_weighted = "Weighted sharing",
+      aligned_stance_change = "Post stance",
+      aligned_original_post_share_change = "Original-post sharing"),
+    Approach = dplyr::case_when(
+      grepl("^available_outcomes", term) ~ "Available outcomes",
+      grepl("^zero_change", term) ~ "Zero change",
+      grepl("^mi_mar", term) ~ "MAR imputation",
+      TRUE ~ "Feasible bounds"),
+    component = ifelse(direction == "direction-x-model", "Direction x model", "Equal-model debunk - bunk"),
+    value = dplyr::case_when(
+      direction == "direction-x-model" ~ paste0("p ", fmt_p(p_value)),
+      grepl("^support_bounds", term) ~ paste0("[", fmt_num(conf_low, 1), ", ", fmt_num(conf_high, 1), "]"),
+      TRUE ~ paste0(fmt_ci(estimate, conf_low, conf_high, 1), "; p ", fmt_p(p_value))
+    ),
+    .o = match(outcome, c("aligned_belief_change",
+                          "aligned_new_minus_old_weighted",
+                          "aligned_stance_change",
+                          "aligned_original_post_share_change"))
+  ) |>
+  dplyr::arrange(.o) |>
+  dplyr::select(Outcome, Approach, component, value) |>
+  tidyr::pivot_wider(names_from = component, values_from = value, values_fill = "---")
+si_kable_styled(
+  s4s_reg,
+  caption = "Registered equal-model asymmetry and direction-by-model omnibus tests for all four outcomes among confirmed chat starters. MAR interaction p-values use a Rubin-pooled HC3 multivariate Wald test. Feasible bounds are identification intervals and do not define an omnibus p-value."
+)
+```
+
+For belief, weighted sharing, and stance, the equal-model debunk-minus-bunk
+estimates were positive under all three point-estimation approaches and their
+feasible-value intervals excluded zero. Direction-by-model omnibus tests had *p* <
+.001. For original-post sharing, the point-estimate intervals and feasible-value
+interval included zero; the MAR interaction test had *p* = .264.
+
+```{r rb-fig-public-speech, fig.cap="Study 4 private belief change and weighted public-sharing change by model and assigned direction. Both the observed-outcome and compliant samples are shown in each panel (solid points/lines = Observed outcomes; hollow points/dashed lines = Compliant)."}
+fig_public_speech()
+```
+
+The extensive-margin analysis treats "would publicly post" as a binary outcome
+and reports pro-conspiracy and anti-conspiracy posting separately. Within an arm, the
+net change is the McNemar within-participant shift in posting willingness; the
+between-arm comparison is a linear probability model of the same binary outcome.
+Table \@ref(tab:rb-extensive) reports the within-arm net percentage-point changes
+with McNemar p-values, broken out by Study-4 model, and Table
+\@ref(tab:rb-extensive-contrast) reports the between-arm bunk-minus-debunk gaps by
+model.
+
+```{r rb-extensive}
+ext <- all_numbers |>
+  dplyr::filter(section == "Public-posting", block == "extensive_margin",
+                term == "net_pp_change", !is.na(model)) |>
+  dplyr::mutate(Outcome = dplyr::recode(outcome,
+                  aligned_public_posting = "Direction-aligned posting"),
+                .m = match(model, c("Claude","Gemini","GPT-5.2","Grok")),
+                `Net pp change` = fmt_num(estimate, 1),
+                p = fmt_p(p_value)) |>
+  dplyr::arrange(.m, direction) |>
+  dplyr::select(Model = model, Outcome, Direction = direction, n, `Net pp change`, p)
+si_kable_styled(ext, caption = "Within-arm net percentage-point change in willingness to publicly post (McNemar tests), by Study-4 model (direction-aligned posting).", digits = 1)
+```
+
+```{r rb-extensive-contrast}
+extc <- all_numbers |>
+  dplyr::filter(section == "Public-posting", block == "extensive_margin_contrast",
+                !is.na(model)) |>
+  dplyr::mutate(Model = model,
+                .m = match(model, c("Claude","Gemini","GPT-5.2","Grok")),
+                `Bunk − debunk pp [95% CI]` = fmt_ci(estimate, conf_low, conf_high, 2),
+                p = fmt_p(p_value)) |>
+  dplyr::arrange(.m) |>
+  dplyr::select(Model, n, `Bunk − debunk pp [95% CI]`, p)
+si_kable_styled(extc, caption = "Between-arm linear-probability contrasts on the direction-aligned extensive margin of public posting (bunk-minus-debunk), by Study-4 model.", digits = 2)
+```
+
+The confirmed-chat-start approaches were also applied to the preregistered
+extensive-margin comparisons. Table \@ref(tab:rb-chat-started-extensive-margins)
+reports pooled debunking changes in pro- and anti-conspiracy posting and per-model
+bunking changes on both margins. Table
+\@ref(tab:rb-chat-started-extensive-aligned) reports every per-model aligned change
+and the bunk-minus-debunk contrasts. Binary feasible-value intervals allow each
+missing post-treatment indicator to be either 0 or 1 while holding its observed
+baseline fixed.
+
+```{r rb-chat-started-extensive-margins}
+s4e_margin <- all_numbers |>
+  dplyr::filter(block == "s4_chat_started_extensive_margin",
+                sample == "chat_started_n1353",
+                outcome %in% c("pro_public_posting_change", "anti_public_posting_change"),
+                (direction == "debunk" & is.na(model)) |
+                (direction == "bunk" & !is.na(model))) |>
+  dplyr::mutate(
+    dir_order = match(as.character(.data$direction), c("debunk", "bunk")),
+    .m = match(ifelse(is.na(.data$model), "All models", .data$model),
+               c("All models", "Claude", "Gemini", "GPT-5.2", "Grok")),
+    .o = match(as.character(.data$outcome),
+               c("pro_public_posting_change", "anti_public_posting_change"))
+  ) |>
+  dplyr::mutate(
+    Outcome = dplyr::recode(outcome,
+      pro_public_posting_change = "Pro-conspiracy posting",
+      anti_public_posting_change = "Anti-conspiracy posting"),
+    Group = ifelse(is.na(model), "All models", model),
+    Direction = dplyr::recode(direction, bunk = "Bunk", debunk = "Debunk"),
+    Approach = dplyr::recode(term,
+      available_outcomes = "Available outcomes",
+      zero_change = "Zero change",
+      mi_mar = "MAR imputation",
+      support_bounds = "Feasible bounds"),
+    value = dplyr::if_else(term == "support_bounds",
+      paste0("[", fmt_num(conf_low, 1), ", ", fmt_num(conf_high, 1), "]"),
+      paste0(fmt_ci(estimate, conf_low, conf_high, 1), "; p ", fmt_p(p_value)))
+  ) |>
+  dplyr::arrange(dir_order, .m, .o) |>
+  dplyr::select(Direction, Group, Outcome, Approach, value) |>
+  tidyr::pivot_wider(names_from = Approach, values_from = value)
+si_kable_styled(
+  s4e_margin,
+  caption = "Pooled debunking and per-model bunking changes in pro- and anti-conspiracy public posting among confirmed chat starters. Estimates are percentage-point changes; available/zero-change p-values are McNemar tests and MAR p-values are Rubin pooled."
+)
+```
+
+```{r rb-chat-started-extensive-aligned}
+s4e_aligned <- all_numbers |>
+  dplyr::filter(block == "s4_chat_started_extensive_margin",
+                sample == "chat_started_n1353",
+                outcome == "aligned_public_posting_change") |>
+  dplyr::mutate(
+    .m = match(as.character(.data$model), c("Claude", "Gemini", "GPT-5.2", "Grok")),
+    .c = match(as.character(.data$direction),
+               c("bunk", "debunk", "bunk-minus-debunk"))
+  ) |>
+  dplyr::mutate(
+    Comparison = dplyr::recode(direction,
+      bunk = "Bunk aligned change",
+      debunk = "Debunk aligned change",
+      `bunk-minus-debunk` = "Bunk - debunk contrast"),
+    Approach = dplyr::recode(term,
+      available_outcomes = "Available outcomes",
+      zero_change = "Zero change",
+      mi_mar = "MAR imputation",
+      support_bounds = "Feasible bounds"),
+    value = dplyr::if_else(term == "support_bounds",
+      paste0("[", fmt_num(conf_low, 1), ", ", fmt_num(conf_high, 1), "]"),
+      paste0(fmt_ci(estimate, conf_low, conf_high, 1), "; p ", fmt_p(p_value)))
+  ) |>
+  dplyr::arrange(.m, .c) |>
+  dplyr::select(Model = model, Comparison, Approach, value) |>
+  tidyr::pivot_wider(names_from = Approach, values_from = value)
+si_kable_styled(
+  s4e_aligned,
+  caption = "Per-model direction-aligned public-posting changes and bunk-minus-debunk contrasts among confirmed chat starters. Estimates are percentage points; feasible-value bounds are identification intervals."
+)
+```
+
+Pooled debunking estimates were negative for pro-conspiracy posting and positive
+for anti-conspiracy posting under each approach; both feasible-value intervals
+excluded zero. GPT-5.2 bunking estimates for aligned posting were negative. The
+bunk-minus-debunk contrasts were negative for all four models under each approach,
+and all four feasible-value intervals excluded zero.
+
+```{r rb-fig-extensive, fig.cap="Net percentage-point change in direction-aligned willingness to post publicly, by Study-4 frontier model and assigned direction (per-model; no pooling)."}
+fig_extensive_margin()
+```
+
+Post-stance composition records the categorical distribution of post types
+(endorses, leans for, neutral/mixed, no stance, leans against, rejects) before
+and after the conversation, for debunking across all models, bunking among
+complying models, and bunking under GPT-5.2 separately.
+
+```{r rb-post-composition}
+pc <- all_numbers |>
+  dplyr::filter(section == "S4 + pooled", block == "post_stance_composition",
+                outcome == "post_stance_category") |>
+  dplyr::mutate(Phase = ifelse(grepl("^pre_", term), "Pre", "Post"),
+                Stance = sub("^(pre|post)_", "", term),
+                Cell = dplyr::recode(direction,
+                  debunk_all_models = "Debunk (all)",
+                  bunk_complying_models = "Bunk (complying)",
+                  bunk_gpt52 = "Bunk (GPT-5.2)"),
+                pct = fmt_num(estimate, 1)) |>
+  dplyr::select(Cell, Phase, Stance, n, `%` = pct)
+si_kable_styled(pc, caption = "Public-post stance composition before and after the conversation, by cell.", digits = 1)
+```
+
+```{r rb-fig-post-composition, fig.cap="Public-post stance composition before versus after the Study 4 conversation, by cell."}
+fig_post_composition()
+```
+
+```{r rb-post-form}
+pf <- all_numbers |>
+  dplyr::filter(section == "S4 + pooled", block == "post_form_composition",
+                outcome == "post_response_type") |>
+  dplyr::mutate(Phase = ifelse(grepl("^pre_", term), "Pre", "Post"),
+                Mode = dplyr::recode(sub("^(pre|post)_", "", term),
+                  assertion = "Assertion",
+                  question_raising = "Question-raising",
+                  mixed_assertion_question = "Mixed assertion / question",
+                  uncertainty_statement = "Uncertainty statement",
+                  declines_to_post = "Declines to post",
+                  meta_task = "Meta / off-task",
+                  unclassifiable = "Unclassifiable"),
+                Direction = dplyr::recode(direction,
+                  pooled = "Pooled", bunk = "Bunk", debunk = "Debunk"),
+                `%` = fmt_num(estimate, 1)) |>
+  dplyr::select(Direction, Phase, Mode, n, `%`)
+si_kable_styled(pf, caption = "Communicative-mode composition of the Study 4 public post before versus after the conversation, by assigned direction (five-rater consensus; shares within cell).", digits = 1)
+```
+
+```{r rb-fig-post-form, fig.cap="Communicative mode of the Study 4 public post before versus after the conversation, by assigned direction."}
+fig_post_form_composition()
+```
+
+### Translating private belief into public expression
+
+The belief and public-sharing effects diverge sharply, but this could in principle
+reflect nothing more than the average belief effects. To test this directly, we
+related each participant's direction-aligned change in private belief to their
+direction-aligned change in weighted public sharing (compliant subset, both signed
+toward the AI's assigned position).
+
+```{r rb-dissoc-stats, include=FALSE}
+.ds <- core_objects$s4$s4_compliant
+.ds <- data.frame(cond = .ds$direction,
+                  dB = .ds$aligned_belief_change,
+                  dS = .ds$aligned_new_minus_old_weighted)
+.ds <- .ds[is.finite(.ds$dB) & is.finite(.ds$dS), ]
+.slope <- function(cc) unname(coef(lm(dS ~ dB, data = subset(.ds, cond == cc)))[2])
+.sl_b <- .slope("bunk"); .sl_d <- .slope("debunk")
+.rcor  <- function(cc) cor(subset(.ds, cond == cc)$dB, subset(.ds, cond == cc)$dS)
+.r_b <- .rcor("bunk"); .r_d <- .rcor("debunk")
+.rlab <- function(r) sub("^0", "", sprintf("%.2f", r))
+.sub  <- subset(.ds, dB <= 0)                       # belief did not move toward the AI
+.m0   <- lm(dS ~ cond, data = .sub)                 # cond: bunk (ref) vs debunk
+.ci0  <- confint(.m0)["conddebunk", ]
+.est0 <- unname(coef(.m0)["conddebunk"]); .p0 <- summary(.m0)$coefficients["conddebunk", 4]
+.n0b  <- sum(.sub$cond == "bunk"); .n0d <- sum(.sub$cond == "debunk")
+.p0lab <- if (.p0 < .001) "< .001" else paste0("= ", formatC(.p0, format = "f", digits = 3))
+```
+
+Among compliant conversations the two arms moved private belief toward their
+assigned positions by similar amounts, and the *within-person* translation of
+belief into public sharing was likewise similar (OLS slope `r round(.sl_b, 2)`
+for bunking and `r round(.sl_d, 2)` for debunking; Pearson *r* = `r .rlab(.r_b)`
+and `r .rlab(.r_d)`, respectively; Fig.
+\@ref(fig:rb-fig-dissociation)A). The asymmetry instead took the form of a
+belief-independent shift in public expression. Among participants whose private
+belief did **not** move toward the AI's position (direction-aligned belief change
+$\leq 0$; *n* = `r .n0b` bunking, `r .n0d` debunking), debunking still shifted weighted
+sharing toward its (anti-conspiracy) side by `r round(.est0, 1)` points more than
+bunking shifted it toward its (pro-conspiracy) side (95% CI
+[`r round(.ci0[1], 1)`, `r round(.ci0[2], 1)`], *p* `r .p0lab`; Fig.
+\@ref(fig:rb-fig-dissociation)B) — a gap indistinguishable from the full compliant
+sample. Indeed, participants whose belief backfired under debunking nonetheless
+distanced themselves publicly from the conspiracy. Debunking thus suppresses the
+public endorsement of conspiracies even when it does not change, or even reverses,
+private belief — a pattern consistent with awareness that conspiracies are widely
+regarded as dubious, such that the prospect of public expression invokes
+reputational or normative considerations that operate independently of private
+conviction.
+
+```{r rb-fig-dissociation, fig.width=9, fig.height=4.4, fig.cap="Study 4 (compliant subset): translation of private belief change into public (weighted) sharing change, both signed toward the AI's assigned side. (A) Each point is a conversation; lines are per-condition OLS fits with 95% CIs -- the within-person slope is similar in the two arms. (B) Mean change in weighted sharing by belief-change stratum (backfire, no change, moved toward the AI) and condition, with 95% CIs; debunking shifts public sharing toward its side more than bunking does even among participants whose private belief did not move toward the AI (left two strata)."}
+fig_belief_sharing_dissociation()
+```
+
+### Robustness: the neutral-50 imputation
+
+```{r rb-imputation, include=FALSE}
+.s4i <- core_objects$s4$s4
+.v2i <- readr::read_csv(core_objects$paths$s4_stance_v2, show_col_types = FALSE, progress = FALSE) |>
+  dplyr::filter(timepoint == "post") |>
+  dplyr::transmute(ResponseId, post_applicable = consensus_applicable %in% c("True", "TRUE"))
+.si <- .s4i |>
+  dplyr::left_join(.v2i, by = "ResponseId") |>
+  dplyr::filter(!is.na(aligned_new_minus_old_weighted), !is.na(direction))
+.asym <- function(d) {
+  m <- d |> dplyr::group_by(direction) |>
+    dplyr::summarise(mw = mean(aligned_new_minus_old_weighted), .groups = "drop")
+  m$mw[m$direction == "debunk"] - m$mw[m$direction == "bunk"]
+}
+.rate <- .si |> dplyr::group_by(direction) |>
+  dplyr::summarise(pct = 100 * mean(!post_applicable, na.rm = TRUE), .groups = "drop")
+imp_bunk <- fmt_num(.rate$pct[.rate$direction == "bunk"], 1)
+imp_deb  <- fmt_num(.rate$pct[.rate$direction == "debunk"], 1)
+imp_all  <- fmt_num(.asym(.si), 1)
+imp_excl <- fmt_num(.asym(dplyr::filter(.si, post_applicable)), 1)
+```
+
+The registered weighted-sharing outcome assigns the neutral midpoint (stance 50,
+and hence *zero* direction weight) to posts the classifier judges off-topic or
+declining (Methods). Because bunking-arm models more often decline or go off-topic
+in some conditions, one could worry that this imputation mechanically dampens the
+bunking sharing effect and inflates the apparent truth advantage in public speech.
+It does not. The imputation rate is, if anything, slightly *lower* under bunking
+(`r imp_bunk`% of bunking posts versus `r imp_deb`% of debunking posts are imputed
+at post), so it cannot differentially suppress the bunking arm. And *excluding* the
+imputed posts entirely --- rather than down-weighting them to zero --- slightly
+*increases* the debunk-minus-bunk asymmetry (from `r imp_all` to `r imp_excl`
+points). The imputation is therefore mildly conservative against the truth-advantage
+conclusion, not responsible for it. (Setting the imputed posts' share likelihood to
+zero is equivalent to the registered rule, since a zero direction weight already
+contributes nothing to the weighted share.)
+
+## Stance-Classifier Validation
+
+The five-model stance ensemble that underlies the weighted-sharing and post-stance
+outcomes is the primary stance measure; its inter-rater reliability is reported in
+the Methods (Section "Five-Rater Post-Stance Scoring," Table
+\@ref(tab:me-stance-reliability)). Here we validate it against an independent human
+gold-coding of 150 Study-4 social-media posts, coded by an author blind to the model
+ratings on the same 0--100 stance scale and six-level stance category.
+
+The ensemble consensus tracks the human coder closely: a Spearman rank correlation of
+`r fmt_num(est("gold_coding", model="consensus", term="spearman_r"), 2)`
+(Pearson `r fmt_num(est("gold_coding", model="consensus", term="pearson_r"), 2)`) on the
+0--100 stance score, a mean absolute error of
+`r fmt_num(est("gold_coding", model="consensus", term="mae"), 1)` points on that 100-point
+scale, exact agreement on the six-level stance category in
+`r scales::percent(est("gold_coding", model="consensus", term="pct_exact_category"), accuracy=1)`
+of posts, and for/against directional agreement in
+`r scales::percent(est("gold_coding", model="consensus", term="pct_directional"), accuracy=1)`
+of the posts that both the human and the model call directional. Every individual
+panel model reaches a comparable level (Table \@ref(tab:rb-gold-validation)): Gemini
+agrees most closely with the human coder and DeepSeek least, but all five sit well
+within the range expected from the ensemble's own high inter-rater reliability, and
+the disagreement that remains is concentrated in the boundary between adjacent stance
+categories (e.g. *leans-for* vs *argues-for*) rather than in the for/against direction
+that the sharing analyses depend on.
+
+```{r rb-gold-validation}
+gv <- all_numbers |>
+  dplyr::filter(block == "gold_coding", section == "Stance validation",
+                !is.na(estimate)) |>
+  dplyr::select(model, term, estimate) |>
+  tidyr::pivot_wider(names_from = term, values_from = estimate) |>
+  dplyr::mutate(
+    Model = dplyr::recode(model, consensus = "Ensemble consensus", claude = "Claude",
+                          gpt = "GPT", gemini = "Gemini", grok = "Grok", deepseek = "DeepSeek"),
+    Spearman = fmt_num(spearman_r, 2), Pearson = fmt_num(pearson_r, 2),
+    MAE = fmt_num(mae, 1),
+    `Exact category` = scales::percent(pct_exact_category, accuracy = 1),
+    `Directional (for/against)` = scales::percent(pct_directional, accuracy = 1),
+    .so = match(model, c("consensus", "claude", "gpt", "gemini", "grok", "deepseek"))) |>
+  dplyr::arrange(.so) |>
+  dplyr::select(Model, Spearman, Pearson, MAE, `Exact category`, `Directional (for/against)`)
+si_kable_styled(gv, caption = "Stance-classifier validation against an independent human gold-coding of 150 Study-4 posts: the five-rater ensemble consensus and each panel model versus the human coder. Spearman and Pearson are correlations on the 0-100 stance score; MAE is the mean absolute error on that scale; Exact category is exact agreement on the six-level stance category; Directional is for/against agreement among posts both the human and model call directional.")
+```
+
+## Veracity of the Focal Conspiracies
+
+```{r rb-focal-flag, include=FALSE}
+fv_has <- any(all_numbers$block == "focal_veracity" & all_numbers$term == "pct_false" &
+                !is.na(all_numbers$estimate))
+```
+
+```{r rb-focal-intro, results='asis', echo=FALSE}
+if (fv_has) cat("
+The analyses above fact-check the *persuader's* claims. A complementary question
+is how epistemically suspect the focal conspiracies themselves were: what share
+of the propositions our participants were uncertain about are, on the best
+available public evidence, false? Each analytic participant's focal restatement
+--- the declarative statement that anchored their belief ratings --- was scored
+0--100 for veracity by a live-web fact-checking judge (perplexity/sonar-pro,
+temperature 0), after first classifying whether the restatement asserts a
+conspiracy claim at all (denial-phrased and no-claim restatements are excluded
+from the headline shares; a sensitivity folding denials back in with flipped
+orientation is reported alongside). Scores are frozen measurement data under
+`data/api_cached/focal_veracity/`; the generating pipeline is
+`code/provenance/python_api/focal_veracity/`.
+")
+```
+
+```{r rb-focal-veracity, eval=fv_has}
+fvt <- all_numbers |>
+  dplyr::filter(block == "focal_veracity",
+                term %in% c("share_conspiracy_claim", "mean_veracity", "pct_false",
+                            "pct_uncertain", "pct_true", "pct_false_sens_flipdenials")) |>
+  dplyr::select(model, term, n, estimate) |>
+  tidyr::pivot_wider(names_from = term, values_from = c(estimate, n)) |>
+  dplyr::mutate(
+    Study = model,
+    `Conspiracy claims (% of scored)` = fmt_num(estimate_share_conspiracy_claim, 1),
+    `n claims` = n_mean_veracity,
+    `Mean veracity` = fmt_num(estimate_mean_veracity, 1),
+    `% false (<40)` = fmt_num(estimate_pct_false, 1),
+    `% uncertain [40,60)` = fmt_num(estimate_pct_uncertain, 1),
+    `% true (>=60)` = fmt_num(estimate_pct_true, 1),
+    `% false (sens., denials flipped)` = fmt_num(estimate_pct_false_sens_flipdenials, 1),
+    .so = match(model, c("Jailbroken", "Standard", "Truth-Constrained", "Study 4", "All studies"))) |>
+  dplyr::arrange(.so) |>
+  dplyr::select(Study, `Conspiracy claims (% of scored)`, `n claims`, `Mean veracity`,
+                `% false (<40)`, `% uncertain [40,60)`, `% true (>=60)`,
+                `% false (sens., denials flipped)`)
+si_kable_styled(fvt, caption = "Veracity of the focal conspiracy statements themselves, by study. Each analytic participant's focal restatement was classified (conspiracy claim / official account / no claim) and, when it asserts a claim, fact-checked 0-100 by perplexity/sonar-pro (temperature 0). Shares are computed among genuine conspiracy-claim restatements; the sensitivity column folds denial-phrased restatements back in with flipped orientation (100 - v).")
+```
+
+```{r rb-focal-subset, eval=fv_has}
+fvs <- all_numbers |>
+  dplyr::filter(block == "focal_veracity_subset",
+                term %in% c("bunk_minus_debunk_ancova", "debunk_minus_bunk_equal_weighted")) |>
+  dplyr::mutate(
+    Subset = dplyr::recode(outcome, false_conspiracies = "Clearly false (<40)",
+                           nonfalse_conspiracies = "Not clearly false (>=40)"),
+    Contrast = dplyr::recode(term,
+                             bunk_minus_debunk_ancova = "Bunk - debunk (ANCOVA)",
+                             debunk_minus_bunk_equal_weighted = "Debunk - bunk (equal-weighted)"),
+    `Estimate [95% CI]` = fmt_ci(estimate, conf_low, conf_high, 2),
+    p = fmt_p(p_value)) |>
+  dplyr::arrange(match(model, c("Jailbroken", "Standard", "Truth-Constrained", "Study 4")), Subset) |>
+  dplyr::select(Study = model, Subset, Contrast, n, `Estimate [95% CI]`, p)
+si_kable_styled(fvs, caption = "Bunking and debunking within veracity subsets of the focal conspiracies. Studies 1-3: the primary-spec additive ANCOVA contrast (aligned change ~ condition + centered baseline, HC3) fit within the clearly-false (<40) and not-clearly-false subsets of genuine conspiracy claims. Study 4: the equal-model-weighted direction contrast, HC3, within the same subsets. Exploratory; subset membership is defined by the focal-statement veracity scores.")
+```
