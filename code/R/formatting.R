@@ -29,6 +29,10 @@ fmt_num <- function(x, digits = 1) {
 }
 
 fmt_p <- function(p) {
+  # Statistical test columns can arrive as one-column matrices (for example,
+  # when a likelihood-ratio statistic is bound into ALL_NUMBERS).  Normalize
+  # those scalar-like inputs before case_when(), which requires vectors.
+  p <- as.numeric(p)
   dplyr::case_when(
     is.na(p) ~ "",
     p < .001 ~ "< .001",
