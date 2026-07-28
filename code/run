@@ -16,7 +16,8 @@ if [[ "${SCRIPT_DIR}" == "/code" && -d /data && -d /scratch ]]; then
   SOURCE_BUNDLE="${SCRIPT_DIR}/code_ocean_sources"
   if [[ ! -f "${SOURCE_BUNDLE}/results_methods.Rmd" ||
         ! -f "${SOURCE_BUNDLE}/supplement/Bunkbot_SI.Rmd" ||
-        ! -f "${SOURCE_BUNDLE}/figures/manuscript/make_figures.R" ]]; then
+        ! -f "${SOURCE_BUNDLE}/figures/manuscript/make_figures.R" ||
+        ! -f "${SOURCE_BUNDLE}/prompts/base_v7_persuasion_degree.yaml" ]]; then
     printf 'Code Ocean source bundle is incomplete: %s\n' "${SOURCE_BUNDLE}" >&2
     exit 2
   fi
@@ -26,6 +27,7 @@ if [[ "${SCRIPT_DIR}" == "/code" && -d /data && -d /scratch ]]; then
   ln -s /data "${REPO_ROOT}/data"
   cp -R "${SOURCE_BUNDLE}/supplement" "${REPO_ROOT}/supplement"
   cp -R "${SOURCE_BUNDLE}/figures" "${REPO_ROOT}/figures"
+  cp -R "${SOURCE_BUNDLE}/prompts" "${REPO_ROOT}/prompts"
   cp "${SOURCE_BUNDLE}/results_methods.Rmd" "${REPO_ROOT}/results_methods.Rmd"
 else
   REPO_ROOT="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"

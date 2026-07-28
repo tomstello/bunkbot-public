@@ -16,7 +16,7 @@ Import the final paper-associated branch or merge it to the repository's default
 branch before importing. Code Ocean maps the repository's `code/` and `data/`
 folders to the capsule's corresponding folders. Other top-level files appear in
 the capsule UI but are not mounted during a Reproducible Run. For that reason,
-the executable document and figure sources are mirrored under
+the executable document, figure, and deployed-prompt sources are mirrored under
 `code/code_ocean_sources/`; `code/run` assembles the ordinary repository layout
 in `/scratch` before rendering.
 
@@ -27,7 +27,8 @@ in Code Ocean (R 4.4.2 as of July 2026). The environment must include:
 
 - the R packages and versions in `renv.lock`;
 - Pandoc;
-- XeLaTeX, `texlive-latex-extra`, and recommended LaTeX fonts;
+- XeLaTeX, `texlive-latex-extra`, `texlive-plain-generic`, and recommended
+  LaTeX fonts;
 - standard build tools plus the Linux development libraries needed by `curl`,
   `openssl`, `xml2`, `nloptr`, `ragg`, `systemfonts`, and `textshaping`.
 
